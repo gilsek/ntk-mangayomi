@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.2.7",
+    version: "0.2.8",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -25,7 +25,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.2.7",
+    version: "0.2.8",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -42,7 +42,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 2,
-    version: "0.2.7",
+    version: "0.2.8",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -601,6 +601,7 @@ function createWebviewImageExtractorScript() {
   if (window.__ntkImageInterceptorInstalled) return;
   window.__ntkImageInterceptorInstalled = true;
   var finished = false;
+  var lastError = "";
   function respond(payload) {
     if (finished) return;
     finished = true;
@@ -650,10 +651,7 @@ function createWebviewImageExtractorScript() {
       return true;
     }
     var error = document.querySelector(".theme-viewer-images .is-error, .theme-viewer-error, [data-theme-unlock-status]");
-    if (error && /보안|검증|실패|error|failed|blocked/i.test(error.textContent || "")) {
-      respond({ ok: false, error: (error.textContent || "").trim() });
-      return true;
-    }
+    if (error) lastError = (error.textContent || "").trim();
     return false;
   }
   if (collect()) return;
@@ -666,7 +664,7 @@ function createWebviewImageExtractorScript() {
     }
     if (attempts >= 25) {
       window.clearInterval(timer);
-      respond({ ok: false, error: "timeout waiting for rendered reader images" });
+      respond({ ok: false, error: lastError || "timeout waiting for rendered reader images" });
     }
   }, 1000);
 })();`;

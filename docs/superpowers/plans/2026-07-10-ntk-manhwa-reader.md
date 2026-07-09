@@ -13,7 +13,7 @@
 - Keep existing Webtoon and Novel behavior unchanged.
 - Preserve boolean and string WebView return values.
 - Use source id `240710002` and rename only its display name.
-- Publish the combined filter and manhwa reader update as extension version `0.2.7`.
+- Publish the combined filter and manhwa reader update as extension version `0.2.8`.
 - Validate on the patched Windows release before any IPA work.
 
 ---
@@ -61,7 +61,7 @@
 
 **Interfaces:**
 - Source id `240710002` is named `NTK Manhwa` in both manifests.
-- All three bundled sources use version `0.2.7` because they share one source file.
+- All three bundled sources use version `0.2.8` because they share one source file.
 - Variant detection remains based on `additionalParams=source=manga`, not the display name.
 
 - [ ] Change manifest expectations first and verify the test fails.
@@ -74,7 +74,7 @@
 - Build artifact: `.ntk-analysis/mangayomi-upstream/build/windows/x64/runner/Release/mangayomi.exe`
 
 **Interfaces:**
-- The patched client consumes the published `0.2.7` source.
+- The patched client consumes the published `0.2.8` source.
 
 - [ ] Run Flutter targeted tests and analysis.
 - [ ] Build Windows release with NuGet available, `/utf-8`, and the existing bundle install prefix.

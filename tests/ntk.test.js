@@ -219,6 +219,45 @@ test("builds WebView extractor script and browser-like headers", () => {
   assert.equal(headers.Cookie, undefined);
 });
 
+test("waits through transient ad verification and captures the image fetch", async () => {
+  const responses = [];
+  const imageResponse = {
+    url: "https://newtoki1.org/api/manhwa-images",
+    clone() {
+      return { json: async () => ({ images: ["https://img/reader-1.webp"] }) };
+    }
+  };
+  const sandbox = {
+    window: {
+      fetch: async () => imageResponse,
+      setInterval: () => 1,
+      clearInterval() {},
+      flutter_inappwebview: {
+        callHandler(_name, payload) {
+          responses.push(JSON.parse(payload));
+        }
+      }
+    },
+    document: {
+      querySelectorAll: () => [],
+      querySelector: () => ({ textContent: "광고 검증 후 다시 시도해주세요" })
+    },
+    Array,
+    JSON,
+    String,
+    RegExp,
+    Promise
+  };
+
+  vm.runInNewContext(ntk.createWebviewImageExtractorScript(), sandbox);
+  assert.deepEqual(responses, []);
+
+  await sandbox.window.fetch("https://newtoki1.org/api/manhwa-images");
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(responses, [{ ok: true, images: ["https://img/reader-1.webp"] }]);
+});
+
 test("detects reader bootstrap token fields", () => {
   const html = String.raw`self.__next_f.push([1,"{\"sourceWorkId\":\"570503\",\"episodeId\":\"1181035\",\"imagesToken\":\"abc.def\",\"viewerUrl\":\"https:\/\/blacktoon410.com\/webtoons\/426\/1181035.html\"}"])`;
   assert.deepEqual(ntk.parseReaderBootstrap(html), {
@@ -374,7 +413,7 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.2.7", "0.2.7", "0.2.7"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.2.8", "0.2.8", "0.2.8"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
   for (const source of index) {
     assert.equal(source.sourceCodeLanguage, 1);
