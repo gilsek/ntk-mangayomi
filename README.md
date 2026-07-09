@@ -38,8 +38,18 @@ https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/index.json
 
 It exposes all three sources: `NTK Webtoon`, `NTK Manga`, and `NTK Novel`.
 
+Mangayomi keeps manga and novel repository lists separately. Add the same URL
+in both lists to make all three entries available.
+
 ## Reader support
 
 `NTK Manga` normalizes legacy `/manga/...` entries to the live `/manhwa/...` route and uses the NTK image API's browser-session proof flow. It includes a pure JavaScript P-256 signing fallback for Mangayomi's QuickJS runtime, which does not provide WebCrypto.
+
+For native manga-image rendering, use a Mangayomi build that returns WebView
+script payloads to JavaScript extensions. The companion source patch is
+available at [gilsek/mangayomi:codex/ntk-webview-payload](https://github.com/gilsek/mangayomi/tree/codex/ntk-webview-payload).
+It changes only the WebView result bridge; it does not modify NTK's page or
+security scripts. A standard 0.7.80 build discards those payloads and cannot
+complete this reader fallback.
 
 `NTK Novel` loads and decrypts novel content in the Mangayomi reader. Its Base64URL and AES-GCM fallback code does not depend on Node or browser-only globals.
