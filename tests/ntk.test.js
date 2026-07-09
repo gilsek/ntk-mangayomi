@@ -221,15 +221,20 @@ test("builds WebView extractor script and browser-like headers", () => {
 
 test("waits through transient ad verification and captures the image fetch", async () => {
   const responses = [];
+  const listeners = {};
   const imageResponse = {
     url: "https://newtoki1.org/api/manhwa-images",
     clone() {
       return { json: async () => ({ images: ["https://img/reader-1.webp"] }) };
     }
   };
+  const nativeFetch = async () => imageResponse;
   const sandbox = {
     window: {
-      fetch: async () => imageResponse,
+      fetch: nativeFetch,
+      addEventListener(name, callback) {
+        listeners[name] = callback;
+      },
       setInterval: () => 1,
       clearInterval() {},
       flutter_inappwebview: {
@@ -251,6 +256,10 @@ test("waits through transient ad verification and captures the image fetch", asy
 
   vm.runInNewContext(ntk.createWebviewImageExtractorScript(), sandbox);
   assert.deepEqual(responses, []);
+  assert.equal(sandbox.window.fetch, nativeFetch);
+
+  listeners["ntk-ad-ack-ready"]();
+  assert.notEqual(sandbox.window.fetch, nativeFetch);
 
   await sandbox.window.fetch("https://newtoki1.org/api/manhwa-images");
   await new Promise((resolve) => setImmediate(resolve));
@@ -413,7 +422,7 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.2.8", "0.2.8", "0.2.8"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.2.9", "0.2.9", "0.2.9"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
   for (const source of index) {
     assert.equal(source.sourceCodeLanguage, 1);

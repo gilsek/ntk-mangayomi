@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.2.8",
+    version: "0.2.9",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -25,7 +25,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.2.8",
+    version: "0.2.9",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -42,7 +42,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 2,
-    version: "0.2.8",
+    version: "0.2.9",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -624,8 +624,11 @@ function createWebviewImageExtractorScript() {
     var value = String(url || "");
     return value.indexOf("/api/manhwa-images") >= 0 || value.indexOf("/api/webtoon-images") >= 0;
   }
-  var nativeFetch = window.fetch;
-  if (typeof nativeFetch === "function") {
+  function installFetchInterceptor() {
+    if (window.__ntkFetchInterceptorInstalled) return;
+    var nativeFetch = window.fetch;
+    if (typeof nativeFetch !== "function") return;
+    window.__ntkFetchInterceptorInstalled = true;
     window.fetch = function(){
       var args = arguments;
       return nativeFetch.apply(this, args).then(function(response){
@@ -641,6 +644,7 @@ function createWebviewImageExtractorScript() {
       });
     };
   }
+  window.addEventListener("ntk-ad-ack-ready", installFetchInterceptor);
   function collect() {
     var nodes = Array.prototype.slice.call(document.querySelectorAll(".theme-viewer-images .theme-viewer-image img, .theme-viewer-images img"));
     var images = nodes.map(imageUrlOf).filter(function(src){
@@ -658,6 +662,7 @@ function createWebviewImageExtractorScript() {
   var attempts = 0;
   var timer = window.setInterval(function(){
     attempts += 1;
+    if (window.__ntk_ad_ack_scope) installFetchInterceptor();
     if (collect()) {
       window.clearInterval(timer);
       return;
