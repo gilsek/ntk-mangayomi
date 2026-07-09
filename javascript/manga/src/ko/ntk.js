@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.2.5",
+    version: "0.2.6",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -25,7 +25,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.2.5",
+    version: "0.2.6",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -42,7 +42,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 2,
-    version: "0.2.5",
+    version: "0.2.6",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -58,6 +58,8 @@ const VARIANTS = {
   webtoon: {
     name: "NTK Webtoon",
     kind: "webtoon",
+    listPage: "/webtoon",
+    authorField: "author",
     listEndpoint: "/api/works",
     latestEndpoint: "/api/works",
     searchKind: "webtoon",
@@ -66,6 +68,8 @@ const VARIANTS = {
   manga: {
     name: "NTK Manga",
     kind: "manhwa",
+    listPage: "/manhwa",
+    authorField: "artist",
     listEndpoint: "/api/manhwa-list",
     latestEndpoint: "/api/manhwa-list",
     searchKind: "manhwa",
@@ -74,6 +78,8 @@ const VARIANTS = {
   novel: {
     name: "NTK Novel",
     kind: "novel",
+    listPage: "/novel",
+    authorField: "author",
     listEndpoint: "/api/novel-list",
     latestEndpoint: "/api/novel-list",
     searchKind: "novel",
@@ -490,6 +496,20 @@ function filterOption(name, value) {
   return { type_name: "SelectOption", name, value };
 }
 
+function textFilter(type, name) {
+  return { type_name: "TextFilter", type, name, state: "" };
+}
+
+function selectFilter(type, name, values, state = 0) {
+  return {
+    type_name: "SelectFilter",
+    type,
+    name,
+    state,
+    values: values.map(([optionName, value]) => filterOption(optionName, value))
+  };
+}
+
 function filterValue(filters, type, fallback) {
   const list = Array.isArray(filters) ? filters : [];
   const found = list.find((filter) => filter && filter.type === type);
@@ -498,30 +518,72 @@ function filterValue(filters, type, fallback) {
   return option && option.value !== undefined ? option.value : fallback;
 }
 
-function buildFilterList() {
+function filterTextValue(filters, type) {
+  const list = Array.isArray(filters) ? filters : [];
+  const found = list.find((filter) => filter && filter.type === type);
+  return found && typeof found.state === "string" ? found.state.trim() : "";
+}
+
+const INITIAL_FILTER_OPTIONS = [
+  ["전체", ""], ["ㄱ", "ㄱ"], ["ㄴ", "ㄴ"], ["ㄷ", "ㄷ"], ["ㄹ", "ㄹ"], ["ㅁ", "ㅁ"],
+  ["ㅂ", "ㅂ"], ["ㅅ", "ㅅ"], ["ㅇ", "ㅇ"], ["ㅈ", "ㅈ"], ["ㅊ", "ㅊ"], ["ㅋ", "ㅋ"],
+  ["ㅌ", "ㅌ"], ["ㅍ", "ㅍ"], ["ㅎ", "ㅎ"], ["a-z", "a-z"], ["0-9", "0-9"]
+];
+
+const STATUS_FILTER_OPTIONS = [["전체", "all"], ["연재중", "ongoing"], ["완결", "completed"]];
+const SORT_FILTER_OPTIONS = [
+  ["최신순", "as_update"], ["신작순", "as_new"], ["북마크순", "as_bookmark"],
+  ["조회순", "as_view"], ["평점순", "as_rating"], ["화수순", "as_episode"]
+];
+
+const WEBTOON_GENRES = ["판타지", "액션", "개그", "미스터리", "로맨스", "드라마", "무협", "스포츠", "일상", "학원", "성인", "BLGL", "한국", "중국"];
+const MANGA_GENRES = ["17", "BL", "SF", "TS", "개그", "게임", "도박", "드라마", "라노벨", "러브코미디", "먹방", "백합", "보추", "순정", "스릴러", "스포츠", "시대", "애니화", "액션", "음악", "이세계", "일상", "전생", "추리", "판타지", "학원", "호러"];
+const NOVEL_GENRES = ["판타지", "무협", "19금", "현대", "로맨스", "로맨스 판타지", "BL", "라노벨", "기타"];
+
+function genreOptions(genres) {
+  return [["전체", ""], ...genres.map((genre) => [genre, genre])];
+}
+
+function buildFilterList(variantName = "webtoon") {
+  const commonTail = (genres) => [
+    selectFilter("status", "상태", STATUS_FILTER_OPTIONS, 1),
+    selectFilter("genre", "장르", genreOptions(genres)),
+    selectFilter("sort", "정렬", SORT_FILTER_OPTIONS)
+  ];
+
+  if (variantName === "manga") {
+    return [
+      textFilter("artist", "작가"),
+      selectFilter("initial", "초성", INITIAL_FILTER_OPTIONS),
+      ...commonTail(MANGA_GENRES)
+    ];
+  }
+
+  if (variantName === "novel") {
+    return [
+      textFilter("author", "작가"),
+      selectFilter("initial", "초성", INITIAL_FILTER_OPTIONS),
+      selectFilter("status", "상태", STATUS_FILTER_OPTIONS, 1),
+      selectFilter("genre", "장르", genreOptions(NOVEL_GENRES)),
+      selectFilter("platform", "플랫폼", [
+        ["전체", ""], ["직접 업로드", "user"], ["노벨피아", "novelpia"], ["북토끼", "booktoki"],
+        ["문피아", "munpia"], ["조아라", "joara"], ["카카오페이지", "kakaopage"],
+        ["네이버 시리즈", "series"], ["리디북스", "ridi"], ["기타", "etc"]
+      ]),
+      selectFilter("sort", "정렬", SORT_FILTER_OPTIONS)
+    ];
+  }
+
   return [
-    {
-      type_name: "SelectFilter",
-      type: "status",
-      name: "상태",
-      state: 1,
-      values: [
-        filterOption("전체", "all"),
-        filterOption("연재", "ongoing"),
-        filterOption("완결", "completed")
-      ]
-    },
-    {
-      type_name: "SelectFilter",
-      type: "sort",
-      name: "정렬",
-      state: 0,
-      values: [
-        filterOption("인기순", "views"),
-        filterOption("최신순", "latest"),
-        filterOption("평점순", "rating")
-      ]
-    }
+    textFilter("author", "작가"),
+    selectFilter("weekday", "요일", [["전체", ""], ["월", "월"], ["화", "화"], ["수", "수"], ["목", "목"], ["금", "금"], ["토", "토"], ["일", "일"], ["열흘", "열흘"]]),
+    selectFilter("initial", "초성", INITIAL_FILTER_OPTIONS),
+    selectFilter("platform", "플랫폼", [
+      ["전체", ""], ["네이버", "1"], ["카카오", "3"], ["레진", "4"], ["투믹스", "5"],
+      ["탑툰", "6"], ["코미카", "7"], ["배틀코믹스", "8"], ["케이툰", "10"],
+      ["피너툰", "13"], ["봄툰", "14"], ["코미코", "15"], ["기타", "99"]
+    ]),
+    ...commonTail(WEBTOON_GENRES)
   ];
 }
 
@@ -1119,13 +1181,18 @@ function createNtkSource(options = {}) {
       return this.buildApiUrl(variant.latestEndpoint, { page });
     },
     __buildSearchUrl(query, page, filters) {
-      return this.buildApiUrl(variant.listEndpoint, {
-        q: query,
-        status: filterValue(filters, "status", "all"),
-        sort: filterValue(filters, "sort", "latest"),
-        page,
-        pageSize: 49,
-        withTotal: 1
+      return this.buildApiUrl(variant.listPage, {
+        kind: variant.kind,
+        stx: String(query || "").trim(),
+        [variant.authorField]: filterTextValue(filters, variant.authorField),
+        yoil: filterValue(filters, "weekday", ""),
+        jaum: filterValue(filters, "initial", ""),
+        plat: filterValue(filters, "platform", ""),
+        pub: filterValue(filters, "status", "ongoing"),
+        tag: filterValue(filters, "genre", ""),
+        sst: filterValue(filters, "sort", "as_update"),
+        sod: "desc",
+        page
       });
     },
     __buildImageCandidates(chapterUrl) {
@@ -1209,18 +1276,40 @@ class DefaultExtension extends ProviderBase {
 
   parseMangaCards(body, baseUrl) {
     const list = [];
+    const seen = new Set();
+    const html = String(body || "");
+    const listItemPattern = /<li\b([^>]*\bdate-title=["'][^"']+["'][^>]*)>([\s\S]*?)<\/li>/gi;
+    let itemMatch;
+    while ((itemMatch = listItemPattern.exec(html)) !== null) {
+      const itemTag = itemMatch[1];
+      const item = itemMatch[2];
+      const name = attrValue(itemTag, "date-title") || stripTags(firstMatch(item, /<span[^>]*class=["'][^"']*\btitle\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/i));
+      const linkTag = firstMatch(item, /(<a[^>]*href=["'][^"']+["'][^>]*>)/i);
+      const href = attrValue(linkTag, "href");
+      const imgTag = firstMatch(item, /(<img[^>]*>)/i);
+      const imageUrl = absoluteUrl(baseUrl, attrValue(imgTag, "src") || attrValue(imgTag, "data-src"));
+      if (name && href && !seen.has(href)) {
+        seen.add(href);
+        list.push({ name, imageUrl, url: href, link: href });
+      }
+    }
+
     const pattern = /(<a[^>]*class=["'][^"']*card[^"']*["'][^>]*>)([\s\S]*?)<\/a>/gi;
     let match;
-    while ((match = pattern.exec(String(body || ""))) !== null) {
+    while ((match = pattern.exec(html)) !== null) {
       const cardTag = match[1];
       const card = match[2];
       const href = attrValue(cardTag, "href");
       const name = stripTags(firstMatch(card, /<p[^>]*class=["'][^"']*subject[^"']*["'][^>]*>([\s\S]*?)<\/p>/i));
       const imgTag = firstMatch(card, /(<img[^>]*>)/i);
       const imageUrl = absoluteUrl(baseUrl, attrValue(imgTag, "src") || attrValue(imgTag, "data-src"));
-      if (name && href) list.push({ name, imageUrl, url: href, link: href });
+      if (name && href && !seen.has(href)) {
+        seen.add(href);
+        list.push({ name, imageUrl, url: href, link: href });
+      }
     }
-    return { list, hasNextPage: false };
+    const hasNextPage = /<a[^>]*href=["'][^"']*[?&](?:amp;)?page=\d+[^"']*["'][^>]*>[\s\S]*?<i[^>]*class=["'][^"']*\bfa-angle-right\b[^"']*["']/i.test(html);
+    return { list, hasNextPage };
   }
 
   async getDetail(url) {
@@ -1523,7 +1612,7 @@ class DefaultExtension extends ProviderBase {
   }
 
   getFilterList() {
-    return buildFilterList();
+    return buildFilterList(this.getVariantName());
   }
 
   getSourcePreferences() {

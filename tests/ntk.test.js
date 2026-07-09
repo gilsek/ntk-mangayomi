@@ -18,31 +18,92 @@ test("builds manga popular API URL", () => {
   assert.equal(url, "https://newtoki1.org/api/manhwa-list?status=ongoing&sort=views&page=3&pageSize=49&withTotal=1");
 });
 
-test("builds filtered API URLs", () => {
+test("builds source-specific filters from the live NTK search forms", () => {
+  const extension = new ntkModule.DefaultExtension();
+
+  extension.source = { additionalParams: "source=webtoon" };
+  const webtoon = extension.getFilterList();
+  assert.deepEqual(webtoon.map((filter) => filter.type), ["author", "weekday", "initial", "platform", "status", "genre", "sort"]);
+  assert.deepEqual(webtoon.find((filter) => filter.type === "weekday").values.map((option) => option.name), ["전체", "월", "화", "수", "목", "금", "토", "일", "열흘"]);
+  assert.ok(webtoon.find((filter) => filter.type === "platform").values.some((option) => option.name === "네이버" && option.value === "1"));
+  assert.ok(webtoon.find((filter) => filter.type === "genre").values.some((option) => option.name === "BLGL"));
+
+  extension.source = { additionalParams: "source=manga" };
+  const manga = extension.getFilterList();
+  assert.deepEqual(manga.map((filter) => filter.type), ["artist", "initial", "status", "genre", "sort"]);
+  assert.ok(manga.find((filter) => filter.type === "genre").values.some((option) => option.name === "이세계"));
+
+  extension.source = { additionalParams: "source=novel" };
+  const novel = extension.getFilterList();
+  assert.deepEqual(novel.map((filter) => filter.type), ["author", "initial", "status", "genre", "platform", "sort"]);
+  assert.ok(novel.find((filter) => filter.type === "platform").values.some((option) => option.name === "문피아" && option.value === "munpia"));
+  assert.deepEqual(novel.find((filter) => filter.type === "sort").values.map((option) => option.name), ["최신순", "신작순", "북마크순", "조회순", "평점순", "화수순"]);
+});
+
+test("builds title search and complete filter URLs against HTML list pages", () => {
+  const extension = new ntkModule.DefaultExtension();
+  extension.source = { additionalParams: "source=webtoon" };
+  const filters = extension.getFilterList();
+  filters.find((filter) => filter.type === "author").state = "232";
+  filters.find((filter) => filter.type === "weekday").state = 5;
+  filters.find((filter) => filter.type === "initial").state = 7;
+  filters.find((filter) => filter.type === "platform").state = 1;
+  filters.find((filter) => filter.type === "status").state = 2;
+  filters.find((filter) => filter.type === "genre").state = 1;
+  filters.find((filter) => filter.type === "sort").state = 3;
+
   const source = ntk.createNtkSource({ variant: "webtoon" });
-  const filters = [
-    {
-      type_name: "SelectFilter",
-      type: "status",
-      state: 2,
-      values: [
-        { type_name: "SelectOption", name: "All", value: "all" },
-        { type_name: "SelectOption", name: "Ongoing", value: "ongoing" },
-        { type_name: "SelectOption", name: "Completed", value: "completed" }
-      ]
-    },
-    {
-      type_name: "SelectFilter",
-      type: "sort",
-      state: 1,
-      values: [
-        { type_name: "SelectOption", name: "Views", value: "views" },
-        { type_name: "SelectOption", name: "Latest", value: "latest" }
-      ]
-    }
-  ];
-  assert.equal(source.__buildPopularUrl(1, filters), "https://newtoki1.org/api/works?status=completed&sort=latest&page=1&pageSize=49&withTotal=1");
-  assert.equal(source.__buildSearchUrl("dragon", 2, filters), "https://newtoki1.org/api/works?q=dragon&status=completed&sort=latest&page=2&pageSize=49&withTotal=1");
+  assert.equal(
+    source.__buildSearchUrl("연애혁명", 2, filters),
+    "https://newtoki1.org/webtoon?kind=webtoon&stx=%EC%97%B0%EC%95%A0%ED%98%81%EB%AA%85&author=232&yoil=%EA%B8%88&jaum=%E3%85%85&plat=1&pub=completed&tag=%ED%8C%90%ED%83%80%EC%A7%80&sst=as_view&sod=desc&page=2"
+  );
+});
+
+test("builds manga and novel filter URLs with source-specific fields", () => {
+  const extension = new ntkModule.DefaultExtension();
+
+  extension.source = { additionalParams: "source=manga" };
+  const mangaFilters = extension.getFilterList();
+  mangaFilters.find((filter) => filter.type === "artist").state = "니시 오사무";
+  mangaFilters.find((filter) => filter.type === "genre").state = mangaFilters.find((filter) => filter.type === "genre").values.findIndex((option) => option.value === "이세계");
+  assert.match(ntk.createNtkSource({ variant: "manga" }).__buildSearchUrl("악마", 1, mangaFilters), /^https:\/\/newtoki1\.org\/manhwa\?kind=manhwa&stx=/);
+  assert.match(ntk.createNtkSource({ variant: "manga" }).__buildSearchUrl("악마", 1, mangaFilters), /artist=%EB%8B%88%EC%8B%9C%20%EC%98%A4%EC%82%AC%EB%AC%B4/);
+  assert.match(ntk.createNtkSource({ variant: "manga" }).__buildSearchUrl("악마", 1, mangaFilters), /tag=%EC%9D%B4%EC%84%B8%EA%B3%84/);
+
+  extension.source = { additionalParams: "source=novel" };
+  const novelFilters = extension.getFilterList();
+  novelFilters.find((filter) => filter.type === "platform").state = novelFilters.find((filter) => filter.type === "platform").values.findIndex((option) => option.value === "munpia");
+  const novelUrl = ntk.createNtkSource({ variant: "novel" }).__buildSearchUrl("천마", 3, novelFilters);
+  assert.match(novelUrl, /^https:\/\/newtoki1\.org\/novel\?kind=novel&stx=/);
+  assert.match(novelUrl, /plat=munpia/);
+  assert.match(novelUrl, /page=3$/);
+});
+
+test("parses current NTK HTML lists, removes duplicates, and detects next page", () => {
+  const extension = new ntkModule.DefaultExtension();
+  const html = `
+    <ul id="webtoon-list-all" class="list">
+      <li data-initial="ㅅ" data-genre="판타지" date-title="수해의 마녀">
+        <div class="img-item"><a href="/manhwa/36439"><img class="theme-thumb-img" src="/cover.jpg"></a>
+        <div class="in-lable"><a href="/manhwa/36439"><span class="title white">수해의 마녀</span></a></div></div>
+      </li>
+      <li data-initial="ㅅ" date-title="수해의 마녀">
+        <a href="/manhwa/36439"><img src="/cover.jpg"></a>
+      </li>
+    </ul>
+    <ul class="pagination"><li><a href="/manhwa?page=2"><i class="fa fa-angle-right"></i></a></li></ul>`;
+
+  assert.deepEqual(extension.parseMangaCards(html, "https://newtoki1.org"), {
+    list: [
+      {
+        name: "수해의 마녀",
+        imageUrl: "https://newtoki1.org/cover.jpg",
+        url: "/manhwa/36439",
+        link: "/manhwa/36439"
+      }
+    ],
+    hasNextPage: true
+  });
 });
 
 test("parses details HTML selectors recovered from APK", () => {
