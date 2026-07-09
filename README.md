@@ -33,7 +33,7 @@ The tests verify:
 Add this single repository URL in Mangayomi's extension repository settings:
 
 ```text
-https://raw.githubusercontent.com/gilsek/ntk-mangayomi/main/index.json
+https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/index.json
 ```
 
 It exposes all three sources: `NTK Webtoon`, `NTK Manga`, and `NTK Novel`.
