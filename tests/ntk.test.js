@@ -291,6 +291,15 @@ test("normalizes cached manga routes from old extension versions", () => {
   assert.equal(ntk.normalizeSourceUrl("/webtoon/570503", "webtoon"), "/webtoon/570503");
 });
 
+test("returns canonical manga links when refreshing cached details", async () => {
+  const extension = new ntkModule.DefaultExtension();
+  extension.source = { name: "NTK Manga", baseUrl: "https://newtoki1.org", additionalParams: "source=manga" };
+  extension.client = { get: async () => ({ body: "<h1 class=\"hero-v2-title\">Test</h1>" }) };
+
+  const detail = await extension.getDetail("/manga/u-moo1unxn-b4jo");
+  assert.equal(detail.link, "/manhwa/u-moo1unxn-b4jo");
+});
+
 test("repository manifests are consistent", () => {
   const index = JSON.parse(fs.readFileSync("index.json", "utf8"));
   const repo = JSON.parse(fs.readFileSync("repo.json", "utf8"));

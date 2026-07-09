@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.2.4",
+    version: "0.2.5",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -25,7 +25,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.2.4",
+    version: "0.2.5",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -42,7 +42,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 2,
-    version: "0.2.4",
+    version: "0.2.5",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -1233,6 +1233,7 @@ class DefaultExtension extends ProviderBase {
     const details = parseDetailsHtml(res.body, source.baseUrl);
     const chapters = parseChaptersHtml(res.body, source.baseUrl);
     return {
+      link: normalizeSourceUrl(url, source.variantName),
       title: details.title,
       imageUrl: details.thumbnailUrl,
       description: details.description,
