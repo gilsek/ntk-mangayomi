@@ -71,6 +71,22 @@ test("detects reader bootstrap token fields", () => {
   });
 });
 
+test("generates HMAC-SHA256 proof compatible with WebCrypto", async () => {
+  const proof = await ntk.hmacSha256Base64Url("session-secret", "token.nonce");
+  assert.equal(proof, "4cYlN815p6tkilfjPL5K4_iLdrr6yS7XbAnJl-bTcKI");
+});
+
+test("generates HMAC-SHA256 proof without WebCrypto", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");
+  Object.defineProperty(globalThis, "crypto", { configurable: true, value: undefined });
+  try {
+    const proof = await ntk.hmacSha256Base64Url("session-secret", "token.nonce");
+    assert.equal(proof, "4cYlN815p6tkilfjPL5K4_iLdrr6yS7XbAnJl-bTcKI");
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, "crypto", descriptor);
+  }
+});
+
 test("parses HTML card fallback lists", () => {
   const extension = new ntkModule.DefaultExtension();
   const result = extension.parseMangaCards(`

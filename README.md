@@ -25,6 +25,7 @@ The tests verify:
 - Chapter parsing.
 - API list parsing for the live `works` response shape.
 - Reader bootstrap token detection.
+- Reader image API HMAC proof generation.
 - Repository manifest consistency.
 
 ## Publishing for iPhone
@@ -41,6 +42,6 @@ with the real raw URL.
 ## Current limitation
 
 List, search, detail, and chapter parsing are implemented.
-Reader image loading is partially blocked by NTK's session proof flow.
-The Tachiyomi APK handles this with an Android WebView that intercepts `/api/webtoon-images` or related API calls after ad/session acknowledgment.
-This JavaScript port detects that state and returns a clear error instead of silently returning empty pages.
+Reader image loading implements NTK's current `/api/nv-issue` session and HMAC proof flow for `/api/webtoon-images` and `/api/manga-images`.
+Live verification still returns `fingerprint_required` outside a browser-like runtime, so the final reader path may need Mangayomi WebView/browser fingerprint support.
+This JavaScript port reports that server response clearly instead of silently returning empty pages.

@@ -261,6 +261,148 @@ function parseReaderBootstrap(html) {
   };
 }
 
+function base64UrlFromBytes(bytes) {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  let output = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const a = bytes[i];
+    const b = i + 1 < bytes.length ? bytes[i + 1] : 0;
+    const c = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    const bits = (a << 16) | (b << 8) | c;
+    output += chars[(bits >> 18) & 63];
+    output += chars[(bits >> 12) & 63];
+    if (i + 1 < bytes.length) output += chars[(bits >> 6) & 63];
+    if (i + 2 < bytes.length) output += chars[bits & 63];
+  }
+  return output;
+}
+
+function randomBase64Url(byteLength) {
+  const bytes = new Uint8Array(byteLength);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return base64UrlFromBytes(bytes);
+}
+
+async function hmacSha256Base64Url(secret, message) {
+  if (typeof crypto === "undefined" || !crypto.subtle) {
+    return base64UrlFromBytes(hmacSha256Bytes(secret, message));
+  }
+  const encoder = createTextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
+  return base64UrlFromBytes(new Uint8Array(signature));
+}
+
+function createTextEncoder() {
+  if (typeof TextEncoder !== "undefined") return new TextEncoder();
+  return {
+    encode(value) {
+      const encoded = unescape(encodeURIComponent(String(value)));
+      const bytes = new Uint8Array(encoded.length);
+      for (let i = 0; i < encoded.length; i += 1) bytes[i] = encoded.charCodeAt(i);
+      return bytes;
+    }
+  };
+}
+
+function rightRotate(value, bits) {
+  return (value >>> bits) | (value << (32 - bits));
+}
+
+function sha256Bytes(inputBytes) {
+  const bytes = Array.from(inputBytes);
+  const bitLength = bytes.length * 8;
+  bytes.push(0x80);
+  while ((bytes.length % 64) !== 56) bytes.push(0);
+  const high = Math.floor(bitLength / 0x100000000);
+  const low = bitLength >>> 0;
+  bytes.push((high >>> 24) & 255, (high >>> 16) & 255, (high >>> 8) & 255, high & 255);
+  bytes.push((low >>> 24) & 255, (low >>> 16) & 255, (low >>> 8) & 255, low & 255);
+
+  const hash = [
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+  ];
+  const constants = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+  ];
+
+  for (let offset = 0; offset < bytes.length; offset += 64) {
+    const words = new Array(64);
+    for (let i = 0; i < 16; i += 1) {
+      const j = offset + i * 4;
+      words[i] = ((bytes[j] << 24) | (bytes[j + 1] << 16) | (bytes[j + 2] << 8) | bytes[j + 3]) >>> 0;
+    }
+    for (let i = 16; i < 64; i += 1) {
+      const s0 = (rightRotate(words[i - 15], 7) ^ rightRotate(words[i - 15], 18) ^ (words[i - 15] >>> 3)) >>> 0;
+      const s1 = (rightRotate(words[i - 2], 17) ^ rightRotate(words[i - 2], 19) ^ (words[i - 2] >>> 10)) >>> 0;
+      words[i] = (words[i - 16] + s0 + words[i - 7] + s1) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = hash;
+    for (let i = 0; i < 64; i += 1) {
+      const s1 = (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) >>> 0;
+      const ch = ((e & f) ^ (~e & g)) >>> 0;
+      const temp1 = (h + s1 + ch + constants[i] + words[i]) >>> 0;
+      const s0 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) >>> 0;
+      const maj = ((a & b) ^ (a & c) ^ (b & c)) >>> 0;
+      const temp2 = (s0 + maj) >>> 0;
+      h = g;
+      g = f;
+      f = e;
+      e = (d + temp1) >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (temp1 + temp2) >>> 0;
+    }
+    hash[0] = (hash[0] + a) >>> 0;
+    hash[1] = (hash[1] + b) >>> 0;
+    hash[2] = (hash[2] + c) >>> 0;
+    hash[3] = (hash[3] + d) >>> 0;
+    hash[4] = (hash[4] + e) >>> 0;
+    hash[5] = (hash[5] + f) >>> 0;
+    hash[6] = (hash[6] + g) >>> 0;
+    hash[7] = (hash[7] + h) >>> 0;
+  }
+
+  const output = new Uint8Array(32);
+  for (let i = 0; i < hash.length; i += 1) {
+    output[i * 4] = (hash[i] >>> 24) & 255;
+    output[i * 4 + 1] = (hash[i] >>> 16) & 255;
+    output[i * 4 + 2] = (hash[i] >>> 8) & 255;
+    output[i * 4 + 3] = hash[i] & 255;
+  }
+  return output;
+}
+
+function hmacSha256Bytes(secret, message) {
+  const encoder = createTextEncoder();
+  let key = Array.from(encoder.encode(secret));
+  if (key.length > 64) key = Array.from(sha256Bytes(key));
+  while (key.length < 64) key.push(0);
+  const outerKey = key.map((byte) => byte ^ 0x5c);
+  const innerKey = key.map((byte) => byte ^ 0x36);
+  const innerHash = sha256Bytes(innerKey.concat(Array.from(encoder.encode(message))));
+  return sha256Bytes(outerKey.concat(Array.from(innerHash)));
+}
+
 function createNtkSource(options = {}) {
   const variantName = options.variant || "webtoon";
   const variant = VARIANTS[variantName] || VARIANTS.webtoon;
@@ -421,7 +563,38 @@ class DefaultExtension extends ProviderBase {
       }
       const bootstrap = parseReaderBootstrap(body);
       if (bootstrap.imagesToken || bootstrap.viewerUrl) {
-        throw new Error("NTK reader requires session proof in WebView before image API access. Open the chapter in a browser-capable view or update this port with Mangayomi WebView proof support.");
+        try {
+          const sessionRes = await this.client.post(
+            joinUrl(source.baseUrl, "/api/nv-issue"),
+            headers,
+            {}
+          );
+          const sessionData = JSON.parse(sessionRes.body || "{}");
+          const session = sessionData.session;
+          if (!session) throw new Error("missing session");
+          const nonce = randomBase64Url(24);
+          const proof = await hmacSha256Base64Url(session, `${bootstrap.imagesToken}.${nonce}`);
+          const endpoint = source.variantName === "manga" ? "/api/manga-images" : "/api/webtoon-images";
+          const imageRes = await this.client.post(
+            joinUrl(source.baseUrl, endpoint),
+            {
+              ...headers,
+              "content-type": "application/json",
+              "x-images-client": "viewer-v1",
+              "x-nv-session": session
+            },
+            {
+              workId: bootstrap.sourceWorkId,
+              episodeId: bootstrap.episodeId,
+              token: bootstrap.imagesToken,
+              nonce,
+              proof
+            }
+          );
+          return parsePageImagesResponse(imageRes.body).map((imageUrl) => ({ url: absoluteUrl(source.baseUrl, imageUrl), headers }));
+        } catch (proofError) {
+          throw new Error(`NTK image API requires browser fingerprint/session proof: ${proofError.message}`);
+        }
       }
     } catch (error) {
       if (/session proof|Ad acknowledgment/.test(String(error && error.message))) throw error;
@@ -494,6 +667,7 @@ if (typeof module !== "undefined") {
       parseWorksResponse,
       parsePageImagesResponse,
       parseReaderBootstrap,
+      hmacSha256Base64Url,
       buildApiUrl: appendQuery
     }
   };
