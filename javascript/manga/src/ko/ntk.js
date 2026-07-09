@@ -8,10 +8,10 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.1.0",
+    version: "0.1.5",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
-    isNsfw: true,
+    isNsfw: false,
     appMinVerReq: "0.5.0",
     additionalParams: "source=webtoon",
     pkgPath: "manga/src/ko/ntk.js"
@@ -25,10 +25,10 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.1.0",
+    version: "0.1.5",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
-    isNsfw: true,
+    isNsfw: false,
     appMinVerReq: "0.5.0",
     additionalParams: "source=manga",
     pkgPath: "manga/src/ko/ntk.js"
@@ -114,6 +114,20 @@ function absoluteUrl(baseUrl, value) {
   return joinUrl(baseUrl, value);
 }
 
+function originFromUrl(value) {
+  const match = String(value || "").match(/^(https?:\/\/[^/]+)/i);
+  return match ? match[1] : "";
+}
+
+function pathFromUrl(value) {
+  const text = String(value || "");
+  const match = text.match(/^https?:\/\/[^/]+(\/[^?#]*)/i);
+  if (match) return match[1];
+  const noHash = text.split("#")[0];
+  const noQuery = noHash.split("?")[0];
+  return noQuery || "/";
+}
+
 function firstMatch(html, regex) {
   const match = String(html || "").match(regex);
   return match ? match[1] : "";
@@ -190,7 +204,7 @@ function parseChaptersHtml(html, baseUrl) {
     const locked = /class=["'][^"']*ep-price-badge/i.test(row);
     return {
       name: locked && name ? `${name} 🔒` : name,
-      url: href.startsWith("http") ? new URL(href).pathname : href,
+      url: href.startsWith("http") ? pathFromUrl(href) : href,
       link: absoluteUrl(baseUrl, href),
       dateUpload: toEpochMillis(dateUpload),
       scanlator: locked ? "🔒" : ""
@@ -250,6 +264,9 @@ function parsePageImagesResponse(body) {
   if (/ad_ack_required/.test(text)) {
     throw new Error("Ad acknowledgment required - open the site in a browser to refresh your session, then retry");
   }
+  if (!text || !text.trim()) {
+    throw new Error("Failed to load images: empty image API response");
+  }
   const data = typeof body === "string" ? JSON.parse(body) : body;
   const images = Array.isArray(data) ? data : pickArray({ images: data.images || data.pages || data.list || data.data });
   const urls = images.map((image) => {
@@ -258,6 +275,27 @@ function parsePageImagesResponse(body) {
   }).filter(Boolean);
   if (urls.length === 0) throw new Error("Failed to load images, please retry");
   return urls;
+}
+
+function parseWebviewImageResponse(result) {
+  if (!result) throw new Error("WebView image extraction returned no result");
+  const data = typeof result === "string" ? JSON.parse(result) : result;
+  if (data && data.ok === false) {
+    throw new Error(`WebView image extraction failed: ${data.error || "unknown error"}`);
+  }
+  const images = Array.isArray(data) ? data : pickArray({ images: data.images || data.pages || data.list || data.data });
+  const urls = images.map((image) => {
+    if (typeof image === "string") return image;
+    return fieldOf(image, ["src", "url", "currentSrc", "image", "imageUrl", "path"]);
+  }).filter((imageUrl) => /^https?:\/\//i.test(imageUrl));
+  if (urls.length === 0) throw new Error("WebView image extraction found no image URLs");
+  return urls;
+}
+
+function responseSummary(response) {
+  const status = response && response.statusCode;
+  const body = String((response && response.body) || "").replace(/\s+/g, " ").slice(0, 240);
+  return `status=${status}; body=${body}`;
 }
 
 function parseReaderBootstrap(html) {
@@ -311,6 +349,159 @@ function randomBase64Url(byteLength) {
     for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
   }
   return base64UrlFromBytes(bytes);
+}
+
+function randomHex(byteLength) {
+  const bytes = new Uint8Array(byteLength);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  let output = "";
+  for (let i = 0; i < bytes.length; i += 1) output += bytes[i].toString(16).padStart(2, "0");
+  return output;
+}
+
+function h32(seed, input) {
+  let hash = seed >>> 0;
+  const text = String(input || "");
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return (`00000000${(hash >>> 0).toString(16)}`).slice(-8);
+}
+
+function createNtkFingerprint(userAgent) {
+  const entropy = [
+    userAgent || "",
+    "ko-KR",
+    "1920x1080x24",
+    "-540",
+    String(Math.random()),
+    String(Date.now())
+  ].join("|");
+  return h32(2166136261, entropy) + h32(3141592653, entropy) + h32(2654435761, entropy) + h32(1597334677, entropy);
+}
+
+function cookieHeaderFromMap(cookieMap) {
+  return Object.keys(cookieMap).map((key) => `${key}=${cookieMap[key]}`).join("; ");
+}
+
+function parseCookieHeader(cookieHeader) {
+  const result = {};
+  String(cookieHeader || "").split(";").forEach((part) => {
+    const [key, ...rest] = part.trim().split("=");
+    if (key) result[key] = rest.join("=");
+  });
+  return result;
+}
+
+function cookieNames(cookieHeader) {
+  return Object.keys(parseCookieHeader(cookieHeader)).sort().join(",");
+}
+
+function mergeSetCookie(cookieHeader, setCookieHeader) {
+  const cookies = parseCookieHeader(cookieHeader);
+  String(setCookieHeader || "").split(/,(?=\s*[^;,]+=)/).forEach((line) => {
+    const first = line.split(";")[0];
+    const [key, ...rest] = first.trim().split("=");
+    if (key) cookies[key] = rest.join("=");
+  });
+  return cookieHeaderFromMap(cookies);
+}
+
+function responseHeader(response, name) {
+  if (!response) return "";
+  const wanted = String(name || "").toLowerCase();
+  const headers = response.headers || response.header || response.responseHeaders;
+  if (!headers) return "";
+  if (typeof headers.get === "function") return headers.get(name) || headers.get(wanted) || "";
+  if (Array.isArray(headers)) {
+    const found = headers.find((entry) => String(entry && (entry.name || entry.key || entry[0]) || "").toLowerCase() === wanted);
+    return found ? String(found.value || found[1] || "") : "";
+  }
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === wanted) return String(headers[key] || "");
+  }
+  return "";
+}
+
+function headersWithCookie(headers, cookieHeader) {
+  return cookieHeader ? { ...headers, Cookie: cookieHeader, cookie: cookieHeader } : { ...headers };
+}
+
+function headersWithoutCookie(headers) {
+  const clean = { ...headers };
+  delete clean.Cookie;
+  delete clean.cookie;
+  return clean;
+}
+
+function browserFetchHeaders(headers, readerUrl) {
+  return {
+    ...headersWithoutCookie(headers),
+    accept: "application/json, text/plain, */*",
+    origin: originFromUrl(readerUrl),
+    referer: readerUrl,
+    "cache-control": "no-store",
+    "x-requested-with": "XMLHttpRequest"
+  };
+}
+
+function createInitialNtkCookie(headers) {
+  const userAgent = (headers && (headers["User-Agent"] || headers["user-agent"])) || "";
+  return cookieHeaderFromMap({
+    ntk_fp: createNtkFingerprint(userAgent),
+    ntk_pid: randomHex(16)
+  });
+}
+
+function createWebviewImageExtractorScript() {
+  return `
+(function(){
+  var finished = false;
+  function respond(payload) {
+    if (finished) return;
+    finished = true;
+    try {
+      window.flutter_inappwebview.callHandler("setResponse", JSON.stringify(payload));
+    } catch (e) {}
+  }
+  function imageUrlOf(img) {
+    return img.currentSrc || img.src || img.getAttribute("data-src") || img.getAttribute("data-original") || "";
+  }
+  function collect() {
+    var nodes = Array.prototype.slice.call(document.querySelectorAll(".theme-viewer-images .theme-viewer-image img, .theme-viewer-images img"));
+    var images = nodes.map(imageUrlOf).filter(function(src){
+      return /^https?:\\/\\//i.test(src) && !/apihost\\.store\\/thema\\//i.test(src);
+    });
+    if (images.length > 0) {
+      respond({ ok: true, images: images });
+      return true;
+    }
+    var error = document.querySelector(".theme-viewer-images .is-error, .theme-viewer-error, [data-theme-unlock-status]");
+    if (error && /보안|검증|실패|error|failed|blocked/i.test(error.textContent || "")) {
+      respond({ ok: false, error: (error.textContent || "").trim() });
+      return true;
+    }
+    return false;
+  }
+  if (collect()) return;
+  var attempts = 0;
+  var timer = window.setInterval(function(){
+    attempts += 1;
+    if (collect()) {
+      window.clearInterval(timer);
+      return;
+    }
+    if (attempts >= 25) {
+      window.clearInterval(timer);
+      respond({ ok: false, error: "timeout waiting for rendered reader images" });
+    }
+  }, 1000);
+})();`;
 }
 
 async function hmacSha256Base64Url(secret, message) {
@@ -469,7 +660,7 @@ function createNtkSource(options = {}) {
       });
     },
     __buildImageCandidates(chapterUrl) {
-      const path = chapterUrl.startsWith("http") ? new URL(chapterUrl).pathname : chapterUrl;
+      const path = chapterUrl.startsWith("http") ? pathFromUrl(chapterUrl) : chapterUrl;
       const parts = path.split("/").filter(Boolean);
       const workId = parts[1] || "";
       const episodeId = parts[parts.length - 1] || "";
@@ -580,9 +771,57 @@ class DefaultExtension extends ProviderBase {
     const headers = this.getHeaders();
     headers["X-WebView-Intercept"] = "true";
     const readerUrl = joinUrl(source.baseUrl, url);
+    const readerPath = pathFromUrl(readerUrl);
+    const browserHeaders = browserFetchHeaders(headers, readerUrl);
+    let cookieHeader = createInitialNtkCookie(headers);
+    let blockingError = null;
 
     try {
-      const readerRes = await this.client.get(readerUrl, headers);
+      const appCookieReaderRes = await this.client.get(readerUrl, headersWithoutCookie(headers));
+      const appCookieBody = appCookieReaderRes.body || "";
+      const appCookieBootstrap = parseReaderBootstrap(appCookieBody);
+      if (appCookieBootstrap.imagesToken || appCookieBootstrap.viewerUrl) {
+        try {
+          const sessionRes = await this.client.post(
+            joinUrl(source.baseUrl, "/api/nv-issue"),
+            browserHeaders,
+            {}
+          );
+          const sessionData = JSON.parse(sessionRes.body || "{}");
+          const session = sessionData.session;
+          if (!session) throw new Error(`missing session; ${responseSummary(sessionRes)}`);
+          const nonce = randomBase64Url(24);
+          const proof = await hmacSha256Base64Url(session, `${appCookieBootstrap.imagesToken}.${nonce}`);
+          const endpoint = source.variant.imageEndpoint;
+          const imageHeaders = {
+            ...browserHeaders,
+            "content-type": "application/json",
+            "x-images-client": "viewer-v1",
+            "x-nv-session": session
+          };
+          const imageRes = await this.client.post(
+            joinUrl(source.baseUrl, endpoint),
+            imageHeaders,
+            {
+              workId: appCookieBootstrap.sourceWorkId,
+              episodeId: appCookieBootstrap.episodeId,
+              token: appCookieBootstrap.imagesToken,
+              nonce,
+              proof
+            }
+          );
+          try {
+            return parsePageImagesResponse(imageRes.body).map((imageUrl) => ({ url: absoluteUrl(source.baseUrl, imageUrl), headers: imageHeaders }));
+          } catch (parseError) {
+            throw new Error(`${parseError.message}; app-cookie ${responseSummary(imageRes)}; bootstrap=${JSON.stringify(appCookieBootstrap)}`);
+          }
+        } catch (appCookieError) {
+          if (/app-cookie/.test(String(appCookieError && appCookieError.message))) blockingError = appCookieError;
+        }
+      }
+
+      const readerRes = await this.client.get(readerUrl, headersWithCookie(headers, cookieHeader));
+      cookieHeader = mergeSetCookie(cookieHeader, responseHeader(readerRes, "set-cookie"));
       const body = readerRes.body || "";
       if (body.trim().startsWith("{") || body.trim().startsWith("[")) {
         return parsePageImagesResponse(body).map((imageUrl) => ({ url: absoluteUrl(source.baseUrl, imageUrl), headers }));
@@ -590,21 +829,57 @@ class DefaultExtension extends ProviderBase {
       const bootstrap = parseReaderBootstrap(body);
       if (bootstrap.imagesToken || bootstrap.viewerUrl) {
         try {
+          const canaryRes = await this.client.post(
+            joinUrl(source.baseUrl, "/api/ad/canary"),
+            {
+              ...headersWithCookie(browserHeaders, cookieHeader),
+              "content-type": "application/json"
+            },
+            { adGuardLoaded: true }
+          );
+          cookieHeader = mergeSetCookie(cookieHeader, responseHeader(canaryRes, "set-cookie"));
+          const challengeRes = await this.client.post(
+            joinUrl(source.baseUrl, "/api/ad/challenge"),
+            {
+              ...headersWithCookie(browserHeaders, cookieHeader),
+              "content-type": "application/json"
+            },
+            { path: readerPath, force: false }
+          );
+          cookieHeader = mergeSetCookie(cookieHeader, responseHeader(challengeRes, "set-cookie"));
+          const challengeData = JSON.parse(challengeRes.body || "{}");
+          if (challengeData.challenge && challengeData.challenge.observationBatchUrl) {
+            const challenge = challengeData.challenge;
+            const urls = Array.isArray(challenge.impressionUrls)
+              ? challenge.impressionUrls.slice(0, Math.max(1, Number(challenge.minSeen || 1)))
+              : [];
+            const observationRes = await this.client.post(
+              absoluteUrl(source.baseUrl, challenge.observationBatchUrl),
+              {
+                ...headersWithCookie(browserHeaders, cookieHeader),
+                "content-type": "application/json"
+              },
+              { challengeToken: challenge.token, path: readerPath, urls }
+            );
+            cookieHeader = mergeSetCookie(cookieHeader, responseHeader(observationRes, "set-cookie"));
+          }
           const sessionRes = await this.client.post(
             joinUrl(source.baseUrl, "/api/nv-issue"),
-            headers,
+            headersWithCookie(browserHeaders, cookieHeader),
             {}
           );
+          cookieHeader = mergeSetCookie(cookieHeader, responseHeader(sessionRes, "set-cookie"));
           const sessionData = JSON.parse(sessionRes.body || "{}");
           const session = sessionData.session;
           if (!session) throw new Error("missing session");
+          cookieHeader = mergeSetCookie(cookieHeader, `nv=${session}`);
           const nonce = randomBase64Url(24);
           const proof = await hmacSha256Base64Url(session, `${bootstrap.imagesToken}.${nonce}`);
           const endpoint = source.variant.imageEndpoint;
           const imageRes = await this.client.post(
             joinUrl(source.baseUrl, endpoint),
             {
-              ...headers,
+              ...headersWithCookie(browserHeaders, cookieHeader),
               "content-type": "application/json",
               "x-images-client": "viewer-v1",
               "x-nv-session": session
@@ -617,13 +892,17 @@ class DefaultExtension extends ProviderBase {
               proof
             }
           );
-          return parsePageImagesResponse(imageRes.body).map((imageUrl) => ({ url: absoluteUrl(source.baseUrl, imageUrl), headers }));
+          try {
+            return parsePageImagesResponse(imageRes.body).map((imageUrl) => ({ url: absoluteUrl(source.baseUrl, imageUrl), headers: headersWithCookie(browserHeaders, cookieHeader) }));
+          } catch (parseError) {
+            throw new Error(`${parseError.message}; ${responseSummary(imageRes)}; cookies=${cookieNames(cookieHeader)}; bootstrap=${JSON.stringify(bootstrap)}`);
+          }
         } catch (proofError) {
-          throw new Error(`NTK image API requires browser fingerprint/session proof: ${proofError.message}`);
+          blockingError = new Error(`NTK image API requires browser fingerprint/session proof: ${proofError.message}`);
         }
       }
     } catch (error) {
-      if (/session proof|Ad acknowledgment/.test(String(error && error.message))) throw error;
+      if (/session proof|Ad acknowledgment|app-cookie/.test(String(error && error.message))) blockingError = error;
     }
 
     const candidates = source.__buildImageCandidates(url);
@@ -636,6 +915,15 @@ class DefaultExtension extends ProviderBase {
         lastError = error;
       }
     }
+    if (typeof evaluateJavascriptViaWebview === "function") {
+      try {
+        const webviewResult = await evaluateJavascriptViaWebview(readerUrl, headersWithoutCookie(headers), [createWebviewImageExtractorScript()]);
+        return parseWebviewImageResponse(webviewResult).map((imageUrl) => ({ url: absoluteUrl(source.baseUrl, imageUrl), headers }));
+      } catch (error) {
+        lastError = new Error(`WebView fallback failed: ${error.message || error}`);
+      }
+    }
+    if (blockingError) throw blockingError;
     if (lastError) throw lastError;
     throw new Error("Failed to load images, please retry");
   }
@@ -692,6 +980,9 @@ if (typeof module !== "undefined") {
       },
       parseWorksResponse,
       parsePageImagesResponse,
+      parseWebviewImageResponse,
+      createWebviewImageExtractorScript,
+      browserFetchHeaders,
       parseReaderBootstrap,
       hmacSha256Base64Url,
       buildApiUrl: appendQuery

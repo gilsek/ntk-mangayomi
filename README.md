@@ -41,7 +41,8 @@ with the real raw URL.
 
 ## Current limitation
 
-List, search, detail, and chapter parsing are implemented.
-Reader image loading implements NTK's current `/api/nv-issue` session and HMAC proof flow for `/api/webtoon-images` and `/api/manhwa-images`.
-Live verification still returns `fingerprint_required` outside a browser-like runtime, so the final reader path may need Mangayomi WebView/browser fingerprint support.
-This JavaScript port reports that server response clearly instead of silently returning empty pages.
+List, search, detail, chapter parsing, and native reader image loading are implemented for `NTK Webtoon`.
+Reader image loading follows NTK's current `/api/nv-issue` session and HMAC proof flow and sends browser-like same-origin headers for the image API request.
+Version `0.1.5` was verified in Mangayomi v0.7.80 against `https://newtoki1.org` with `연애혁명 0443 - 후기`; the native reader displayed page `1 / 152`.
+
+`NTK Manga` shares the same parser, but `/api/manhwa-images` may require Newtoki's browser request-key signing path for some titles. If a manga title is blocked, the app-side WebView/browser bridge may still be needed.

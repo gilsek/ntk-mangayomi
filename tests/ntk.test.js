@@ -100,6 +100,26 @@ test("parses image arrays and rejects ad acknowledgment", () => {
   assert.throws(() => ntk.parsePageImagesResponse("{\"ad_ack_required\":true}"), /Ad acknowledgment required/);
 });
 
+test("parses WebView image extraction payloads", () => {
+  assert.deepEqual(ntk.parseWebviewImageResponse(JSON.stringify({ ok: true, images: [{ src: "https://img/1.webp" }, "https://img/2.webp"] })), [
+    "https://img/1.webp",
+    "https://img/2.webp"
+  ]);
+  assert.throws(() => ntk.parseWebviewImageResponse(JSON.stringify({ ok: false, error: "blocked" })), /blocked/);
+});
+
+test("builds WebView extractor script and browser-like headers", () => {
+  const script = ntk.createWebviewImageExtractorScript();
+  assert.match(script, /theme-viewer-images/);
+  assert.match(script, /setResponse/);
+
+  const headers = ntk.browserFetchHeaders({ "User-Agent": "UA", Cookie: "a=b" }, "https://newtoki1.org/webtoon/570503/1181035");
+  assert.equal(headers["User-Agent"], "UA");
+  assert.equal(headers.origin, "https://newtoki1.org");
+  assert.equal(headers.referer, "https://newtoki1.org/webtoon/570503/1181035");
+  assert.equal(headers.Cookie, undefined);
+});
+
 test("detects reader bootstrap token fields", () => {
   const html = String.raw`self.__next_f.push([1,"{\"sourceWorkId\":\"570503\",\"episodeId\":\"1181035\",\"imagesToken\":\"abc.def\",\"viewerUrl\":\"https:\/\/blacktoon410.com\/webtoons\/426\/1181035.html\"}"])`;
   assert.deepEqual(ntk.parseReaderBootstrap(html), {
@@ -197,7 +217,7 @@ test("repository manifests are consistent", () => {
   assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga"]);
   for (const source of index) {
     assert.equal(source.sourceCodeLanguage, 1);
-    assert.equal(source.isNsfw, true);
+    assert.equal(source.isNsfw, false);
     assert.match(source.sourceCodeUrl, /javascript\/manga\/src\/ko\/ntk\.js$/);
   }
 });
