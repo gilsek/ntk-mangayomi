@@ -207,6 +207,10 @@ test("builds WebView extractor script and browser-like headers", () => {
   const script = ntk.createWebviewImageExtractorScript();
   assert.match(script, /theme-viewer-images/);
   assert.match(script, /setResponse/);
+  assert.match(script, /window\.fetch/);
+  assert.match(script, /response\.clone\(\)/);
+  assert.match(script, /\/api\/(?:manhwa|webtoon)-images/);
+  assert.match(script, /__ntkImageInterceptorInstalled/);
 
   const headers = ntk.browserFetchHeaders({ "User-Agent": "UA", Cookie: "a=b" }, "https://newtoki1.org/webtoon/570503/1181035");
   assert.equal(headers["User-Agent"], "UA");
@@ -354,7 +358,7 @@ test("normalizes cached manga routes from old extension versions", () => {
 
 test("returns canonical manga links when refreshing cached details", async () => {
   const extension = new ntkModule.DefaultExtension();
-  extension.source = { name: "NTK Manga", baseUrl: "https://newtoki1.org", additionalParams: "source=manga" };
+  extension.source = { name: "NTK Manhwa", baseUrl: "https://newtoki1.org", additionalParams: "source=manga" };
   extension.client = { get: async () => ({ body: "<h1 class=\"hero-v2-title\">Test</h1>" }) };
 
   const detail = await extension.getDetail("/manga/u-moo1unxn-b4jo");
@@ -369,7 +373,8 @@ test("repository manifests are consistent", () => {
   assert.equal(repo.name, "NTK Mangayomi extensions");
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
-  assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manga", "NTK Novel"]);
+  assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.2.7", "0.2.7", "0.2.7"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
   for (const source of index) {
     assert.equal(source.sourceCodeLanguage, 1);

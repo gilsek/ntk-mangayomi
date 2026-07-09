@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.2.6",
+    version: "0.2.7",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -18,14 +18,14 @@ const mangayomiSources = [
   },
   {
     id: 240710002,
-    name: "NTK Manga",
+    name: "NTK Manhwa",
     lang: "ko",
     baseUrl: "https://newtoki1.org",
     apiUrl: "",
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.2.6",
+    version: "0.2.7",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -42,7 +42,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 2,
-    version: "0.2.6",
+    version: "0.2.7",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -66,7 +66,7 @@ const VARIANTS = {
     imageEndpoint: "/api/webtoon-images"
   },
   manga: {
-    name: "NTK Manga",
+    name: "NTK Manhwa",
     kind: "manhwa",
     listPage: "/manhwa",
     authorField: "artist",
@@ -598,6 +598,8 @@ function createInitialNtkCookie(headers) {
 function createWebviewImageExtractorScript() {
   return `
 (function(){
+  if (window.__ntkImageInterceptorInstalled) return;
+  window.__ntkImageInterceptorInstalled = true;
   var finished = false;
   function respond(payload) {
     if (finished) return;
@@ -608,6 +610,35 @@ function createWebviewImageExtractorScript() {
   }
   function imageUrlOf(img) {
     return img.currentSrc || img.src || img.getAttribute("data-src") || img.getAttribute("data-original") || "";
+  }
+  function imageUrlsOf(payload) {
+    var list = Array.isArray(payload) ? payload : (payload && (payload.images || payload.pages || payload.list || payload.data));
+    if (!Array.isArray(list)) return [];
+    return list.map(function(image){
+      if (typeof image === "string") return image;
+      return image && (image.url || image.src || image.image || image.imageUrl || image.path) || "";
+    }).filter(function(src){ return /^https?:\\/\\//i.test(src); });
+  }
+  function isImageApi(url) {
+    var value = String(url || "");
+    return value.indexOf("/api/manhwa-images") >= 0 || value.indexOf("/api/webtoon-images") >= 0;
+  }
+  var nativeFetch = window.fetch;
+  if (typeof nativeFetch === "function") {
+    window.fetch = function(){
+      var args = arguments;
+      return nativeFetch.apply(this, args).then(function(response){
+        var request = args[0];
+        var requestUrl = typeof request === "string" ? request : (request && request.url);
+        if (isImageApi(response.url || requestUrl)) {
+          response.clone().json().then(function(payload){
+            var images = imageUrlsOf(payload);
+            if (images.length > 0) respond({ ok: true, images: images });
+          }).catch(function(){});
+        }
+        return response;
+      });
+    };
   }
   function collect() {
     var nodes = Array.prototype.slice.call(document.querySelectorAll(".theme-viewer-images .theme-viewer-image img, .theme-viewer-images img"));
@@ -1513,6 +1544,7 @@ class DefaultExtension extends ProviderBase {
         lastError = new Error(`WebView fallback failed: ${error.message || error}`);
       }
     }
+    if (lastError && /WebView fallback failed/.test(String(lastError.message || lastError))) throw lastError;
     if (blockingError) throw blockingError;
     if (lastError) throw lastError;
     throw new Error("Failed to load images, please retry");
