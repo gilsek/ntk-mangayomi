@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const nodeCrypto = require("node:crypto");
 const fs = require("node:fs");
+const vm = require("node:vm");
 const ntkModule = require("../javascript/manga/src/ko/ntk.js");
 const ntk = ntkModule.__ntkTest;
 
@@ -14,6 +16,33 @@ test("builds manga popular API URL", () => {
   const source = ntk.createNtkSource({ variant: "manga" });
   const url = source.__buildPopularUrl(3);
   assert.equal(url, "https://newtoki1.org/api/manhwa-list?status=ongoing&sort=views&page=3&pageSize=49&withTotal=1");
+});
+
+test("builds filtered API URLs", () => {
+  const source = ntk.createNtkSource({ variant: "webtoon" });
+  const filters = [
+    {
+      type_name: "SelectFilter",
+      type: "status",
+      state: 2,
+      values: [
+        { type_name: "SelectOption", name: "All", value: "all" },
+        { type_name: "SelectOption", name: "Ongoing", value: "ongoing" },
+        { type_name: "SelectOption", name: "Completed", value: "completed" }
+      ]
+    },
+    {
+      type_name: "SelectFilter",
+      type: "sort",
+      state: 1,
+      values: [
+        { type_name: "SelectOption", name: "Views", value: "views" },
+        { type_name: "SelectOption", name: "Latest", value: "latest" }
+      ]
+    }
+  ];
+  assert.equal(source.__buildPopularUrl(1, filters), "https://newtoki1.org/api/works?status=completed&sort=latest&page=1&pageSize=49&withTotal=1");
+  assert.equal(source.__buildSearchUrl("dragon", 2, filters), "https://newtoki1.org/api/works?q=dragon&status=completed&sort=latest&page=2&pageSize=49&withTotal=1");
 });
 
 test("parses details HTML selectors recovered from APK", () => {
@@ -161,6 +190,34 @@ test("generates HMAC-SHA256 proof without WebCrypto", async () => {
   }
 });
 
+test("decodes Base64URL without Buffer or atob", () => {
+  const source = fs.readFileSync("javascript/manga/src/ko/ntk.js", "utf8");
+  const sandbox = { module: { exports: {} }, Uint8Array, Array, String, Number, Math, JSON, RegExp, Date, decodeURIComponent };
+  vm.runInNewContext(`${source}\nmodule.exports = { base64UrlToBytes };`, sandbox);
+  assert.deepEqual(Array.from(sandbox.module.exports.base64UrlToBytes("SGVsbG8td29ybGQ")), [72, 101, 108, 108, 111, 45, 119, 111, 114, 108, 100]);
+});
+
+test("generates manga image signature headers without WebCrypto", async () => {
+  const source = fs.readFileSync("javascript/manga/src/ko/ntk.js", "utf8");
+  const sandbox = { module: { exports: {} }, Uint8Array, Array, String, Number, Math, JSON, RegExp, Date, decodeURIComponent, BigInt, crypto: undefined };
+  vm.runInNewContext(`${source}\nmodule.exports = { createBrowserSignedHeaders };`, sandbox);
+  const headers = await sandbox.module.exports.createBrowserSignedHeaders({
+    async post() { return { body: JSON.stringify({ ok: true, keyId: "test-key", serverNow: Date.now() }) }; }
+  }, "https://newtoki1.org", "POST", "/api/manhwa-images", "/manhwa/a/b", "{}", {});
+  assert.equal(headers["x-ntk-key-id"], "test-key");
+  assert.match(headers["x-ntk-sig"], /^[A-Za-z0-9_-]+$/);
+});
+
+test("signs NTK browser requests with a pure P-256 key when WebCrypto is unavailable", () => {
+  const source = fs.readFileSync("javascript/manga/src/ko/ntk.js", "utf8");
+  const sandbox = { module: { exports: {} }, Uint8Array, Array, String, Number, Math, JSON, RegExp, Date, decodeURIComponent, BigInt, crypto: undefined };
+  vm.runInNewContext(`${source}\nmodule.exports = { createP256BrowserKeyPair };`, sandbox);
+  const pair = sandbox.module.exports.createP256BrowserKeyPair("test entropy");
+  const message = "ntk-brsig-v1\nPOST\n/api/manhwa-images\n/manhwa/a/b\nkey\n1\nnonce\nhash";
+  const publicKey = nodeCrypto.createPublicKey({ key: pair.publicJwk, format: "jwk" });
+  assert.equal(nodeCrypto.verify("sha256", Buffer.from(message), { key: publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(pair.sign(message))), true);
+});
+
 test("parses HTML card fallback lists", () => {
   const extension = new ntkModule.DefaultExtension();
   const result = extension.parseMangaCards(`
@@ -210,6 +267,24 @@ test("parses live-shaped works API response into source routes", () => {
   assert.equal(manga.list[0].link, "/manhwa/570503");
 });
 
+test("parses live-shaped novel API response into novel routes", () => {
+  const body = JSON.stringify({
+    novels: [
+      {
+        id: "62101",
+        sourceWorkId: "joara-mrdtttq8-sw7u",
+        title: "드래곤의 유산",
+        thumbnailUrl: "https://aws-cdn1.site/home_thumb/novel/62101.webp"
+      }
+    ],
+    page: 1,
+    total: 2,
+    pageSize: 1
+  });
+  const result = ntk.parseWorksResponse(body, "https://newtoki1.org", "novel");
+  assert.equal(result.list[0].link, "/novel/62101");
+});
+
 test("normalizes cached manga routes from old extension versions", () => {
   assert.equal(ntk.normalizeSourceUrl("/manga/u-moo1unxn-b4jo", "manga"), "/manhwa/u-moo1unxn-b4jo");
   assert.equal(ntk.normalizeSourceUrl("https://newtoki1.org/manga/2", "manga"), "https://newtoki1.org/manhwa/2");
@@ -221,11 +296,11 @@ test("repository manifests are consistent", () => {
   const repo = JSON.parse(fs.readFileSync("repo.json", "utf8"));
   const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
-  assert.equal(repo.name, "Local NTK Mangayomi extensions");
+  assert.equal(repo.name, "NTK Mangayomi extensions");
   assert.equal(pkg.scripts.test, "node --test");
-  assert.equal(index.length, 2);
-  assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manga"]);
-  assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga"]);
+  assert.equal(index.length, 3);
+  assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manga", "NTK Novel"]);
+  assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
   for (const source of index) {
     assert.equal(source.sourceCodeLanguage, 1);
     assert.equal(source.isNsfw, false);

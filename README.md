@@ -28,21 +28,18 @@ The tests verify:
 - Reader image API HMAC proof generation.
 - Repository manifest consistency.
 
-## Publishing for iPhone
+## Install on iPhone
 
-Mangayomi needs `index.json` and `sourceCodeUrl` to be reachable over HTTP(S).
-Before adding this repository on iPhone, publish the files somewhere reachable, then replace the placeholder `sourceCodeUrl` values in `index.json`:
+Add this single repository URL in Mangayomi's extension repository settings:
 
 ```text
-https://raw.githubusercontent.com/local/ntk-mangayomi/main/javascript/manga/src/ko/ntk.js
+https://raw.githubusercontent.com/gilsek/ntk-mangayomi/main/index.json
 ```
 
-with the real raw URL.
+It exposes all three sources: `NTK Webtoon`, `NTK Manga`, and `NTK Novel`.
 
-## Current limitation
+## Reader support
 
-List, search, detail, chapter parsing, and native reader image loading are implemented for `NTK Webtoon`.
-Reader image loading follows NTK's current `/api/nv-issue` session and HMAC proof flow and sends browser-like same-origin headers for the image API request.
-Version `0.1.9` was verified in Mangayomi v0.7.80 against `https://newtoki1.org` with `NTK Webtoon`; the native reader displayed chapter images.
+`NTK Manga` normalizes legacy `/manga/...` entries to the live `/manhwa/...` route and uses the NTK image API's browser-session proof flow. It includes a pure JavaScript P-256 signing fallback for Mangayomi's QuickJS runtime, which does not provide WebCrypto.
 
-`NTK Manga` shares the same parser but uses the live Manatoki detail route `/manhwa/{sourceWorkId}`. The old `/manga/{sourceWorkId}` path returns a maintenance page on `newtoki1.org`; cached URLs from older extension versions are normalized to `/manhwa/{sourceWorkId}` before detail and reader requests.
+`NTK Novel` loads and decrypts novel content in the Mangayomi reader. Its Base64URL and AES-GCM fallback code does not depend on Node or browser-only globals.

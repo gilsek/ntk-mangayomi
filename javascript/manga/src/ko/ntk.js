@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.1.9",
+    version: "0.2.4",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -25,12 +25,29 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.1.9",
+    version: "0.2.4",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
     appMinVerReq: "0.5.0",
     additionalParams: "source=manga",
+    pkgPath: "manga/src/ko/ntk.js"
+  },
+  {
+    id: 240710003,
+    name: "NTK Novel",
+    lang: "ko",
+    baseUrl: "https://newtoki1.org",
+    apiUrl: "",
+    iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
+    typeSource: "single",
+    itemType: 2,
+    version: "0.2.4",
+    dateFormat: "yy.MM.dd",
+    dateFormatLocale: "ko",
+    isNsfw: false,
+    appMinVerReq: "0.5.0",
+    additionalParams: "source=novel",
     pkgPath: "manga/src/ko/ntk.js"
   }
 ];
@@ -50,9 +67,17 @@ const VARIANTS = {
     name: "NTK Manga",
     kind: "manhwa",
     listEndpoint: "/api/manhwa-list",
-    latestEndpoint: "/manhwa/updates",
+    latestEndpoint: "/api/manhwa-list",
     searchKind: "manhwa",
     imageEndpoint: "/api/manhwa-images"
+  },
+  novel: {
+    name: "NTK Novel",
+    kind: "novel",
+    listEndpoint: "/api/novel-list",
+    latestEndpoint: "/api/novel-list",
+    searchKind: "novel",
+    imageEndpoint: ""
   }
 };
 
@@ -230,7 +255,7 @@ function toEpochMillis(text) {
 function pickArray(data) {
   if (Array.isArray(data)) return data;
   if (!data || typeof data !== "object") return [];
-  for (const key of ["images", "pages", "list", "items", "works", "data", "results", "rows"]) {
+  for (const key of ["images", "pages", "list", "items", "works", "novels", "data", "results", "rows"]) {
     if (Array.isArray(data[key])) return data[key];
   }
   if (data.data && typeof data.data === "object") return pickArray(data.data);
@@ -247,9 +272,11 @@ function fieldOf(item, names) {
 
 function parseWorksResponse(body, baseUrl, variantName = "webtoon") {
   const data = typeof body === "string" ? JSON.parse(body) : body;
-  const routePrefix = variantName === "manga" ? "/manhwa" : "/webtoon";
+  const routePrefix = variantName === "manga" ? "/manhwa" : variantName === "novel" ? "/novel" : "/webtoon";
   const list = pickArray(data).map((item) => {
-    const sourceWorkId = fieldOf(item, ["sourceWorkId", "id", "workId", "hid", "slug"]);
+    const sourceWorkId = variantName === "novel"
+      ? fieldOf(item, ["id", "novelId", "sourceWorkId", "workId", "hid", "slug"])
+      : fieldOf(item, ["sourceWorkId", "id", "workId", "hid", "slug"]);
     const rawUrl = fieldOf(item, ["url", "href", "path", "link"]);
     const link = rawUrl || (sourceWorkId ? `${routePrefix}/${sourceWorkId}` : "");
     return {
@@ -459,6 +486,45 @@ function browserFetchHeaders(headers, readerUrl) {
   };
 }
 
+function filterOption(name, value) {
+  return { type_name: "SelectOption", name, value };
+}
+
+function filterValue(filters, type, fallback) {
+  const list = Array.isArray(filters) ? filters : [];
+  const found = list.find((filter) => filter && filter.type === type);
+  if (!found || !Array.isArray(found.values)) return fallback;
+  const option = found.values[Number(found.state || 0)];
+  return option && option.value !== undefined ? option.value : fallback;
+}
+
+function buildFilterList() {
+  return [
+    {
+      type_name: "SelectFilter",
+      type: "status",
+      name: "상태",
+      state: 1,
+      values: [
+        filterOption("전체", "all"),
+        filterOption("연재", "ongoing"),
+        filterOption("완결", "completed")
+      ]
+    },
+    {
+      type_name: "SelectFilter",
+      type: "sort",
+      name: "정렬",
+      state: 0,
+      values: [
+        filterOption("인기순", "views"),
+        filterOption("최신순", "latest"),
+        filterOption("평점순", "rating")
+      ]
+    }
+  ];
+}
+
 function createInitialNtkCookie(headers) {
   const userAgent = (headers && (headers["User-Agent"] || headers["user-agent"])) || "";
   return cookieHeaderFromMap({
@@ -527,6 +593,393 @@ async function hmacSha256Base64Url(secret, message) {
   );
   const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
   return base64UrlFromBytes(new Uint8Array(signature));
+}
+
+function base64UrlToBytes(value) {
+  const text = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+  const padded = text + "=".repeat((4 - (text.length % 4)) % 4);
+  if (typeof Buffer !== "undefined") return new Uint8Array(Buffer.from(padded, "base64"));
+  if (typeof atob === "function") {
+    const raw = atob(padded);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
+    return bytes;
+  }
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const bytes = [];
+  let buffer = 0;
+  let bits = 0;
+  for (let i = 0; i < padded.length; i += 1) {
+    const char = padded.charAt(i);
+    if (char === "=") break;
+    const valueAt = alphabet.indexOf(char);
+    if (valueAt < 0) throw new Error("Invalid Base64 payload");
+    buffer = (buffer << 6) | valueAt;
+    bits += 6;
+    while (bits >= 8) {
+      bits -= 8;
+      bytes.push((buffer >>> bits) & 255);
+    }
+  }
+  return new Uint8Array(bytes);
+}
+
+function utf8DecodeBytes(bytes) {
+  if (typeof TextDecoder !== "undefined") return new TextDecoder("utf-8").decode(bytes);
+  let text = "";
+  for (let i = 0; i < bytes.length; i += 1) text += `%${bytes[i].toString(16).padStart(2, "0")}`;
+  return decodeURIComponent(text);
+}
+
+async function sha256Base64Url(text) {
+  const encoder = createTextEncoder();
+  if (typeof crypto !== "undefined" && crypto.subtle) {
+    const digest = await crypto.subtle.digest("SHA-256", encoder.encode(String(text || "")));
+    return base64UrlFromBytes(new Uint8Array(digest));
+  }
+  return base64UrlFromBytes(sha256Bytes(Array.from(encoder.encode(String(text || "")))));
+}
+
+const AES_SBOX = [
+  99,124,119,123,242,107,111,197,48,1,103,43,254,215,171,118,202,130,201,125,250,89,71,240,173,212,162,175,156,164,114,192,
+  183,253,147,38,54,63,247,204,52,165,229,241,113,216,49,21,4,199,35,195,24,150,5,154,7,18,128,226,235,39,178,117,9,131,
+  44,26,27,110,90,160,82,59,214,179,41,227,47,132,83,209,0,237,32,252,177,91,106,203,190,57,74,76,88,207,208,239,170,251,
+  67,77,51,133,69,249,2,127,80,60,159,168,81,163,64,143,146,157,56,245,188,182,218,33,16,255,243,210,205,12,19,236,95,151,
+  68,23,196,167,126,61,100,93,25,115,96,129,79,220,34,42,144,136,70,238,184,20,222,94,11,219,224,50,58,10,73,6,36,92,194,
+  211,172,98,145,149,228,121,231,200,55,109,141,213,78,169,108,86,244,234,101,122,174,8,186,120,37,46,28,166,180,198,232,
+  221,116,31,75,189,139,138,112,62,181,102,72,3,246,14,97,53,87,185,134,193,29,158,225,248,152,17,105,217,142,148,155,
+  30,135,233,206,85,40,223,140,161,137,13,191,230,66,104,65,153,45,15,176,84,187,22
+];
+
+const AES_RCON = [0,1,2,4,8,16,32,64,128,27,54,108,216,171,77];
+
+function aesXtime(value) {
+  return ((value << 1) ^ (((value >>> 7) & 1) * 0x1b)) & 255;
+}
+
+function aesSubWord(word) {
+  return word.map((byte) => AES_SBOX[byte]);
+}
+
+function aesRotWord(word) {
+  return [word[1], word[2], word[3], word[0]];
+}
+
+function aesExpandKey(key) {
+  const nk = key.length / 4;
+  const nr = nk + 6;
+  const words = [];
+  for (let i = 0; i < nk; i += 1) words[i] = [key[i * 4], key[i * 4 + 1], key[i * 4 + 2], key[i * 4 + 3]];
+  for (let i = nk; i < 4 * (nr + 1); i += 1) {
+    let temp = words[i - 1].slice();
+    if (i % nk === 0) {
+      temp = aesSubWord(aesRotWord(temp));
+      temp[0] ^= AES_RCON[i / nk];
+    } else if (nk > 6 && i % nk === 4) {
+      temp = aesSubWord(temp);
+    }
+    words[i] = words[i - nk].map((byte, idx) => byte ^ temp[idx]);
+  }
+  return { words, nr };
+}
+
+function aesAddRoundKey(state, words, round) {
+  for (let col = 0; col < 4; col += 1) {
+    const word = words[round * 4 + col];
+    for (let row = 0; row < 4; row += 1) state[col * 4 + row] ^= word[row];
+  }
+}
+
+function aesSubBytes(state) {
+  for (let i = 0; i < 16; i += 1) state[i] = AES_SBOX[state[i]];
+}
+
+function aesShiftRows(state) {
+  const copy = state.slice();
+  for (let row = 1; row < 4; row += 1) {
+    for (let col = 0; col < 4; col += 1) state[col * 4 + row] = copy[((col + row) % 4) * 4 + row];
+  }
+}
+
+function aesMixColumns(state) {
+  for (let col = 0; col < 4; col += 1) {
+    const offset = col * 4;
+    const a0 = state[offset], a1 = state[offset + 1], a2 = state[offset + 2], a3 = state[offset + 3];
+    const t = a0 ^ a1 ^ a2 ^ a3;
+    state[offset] ^= t ^ aesXtime(a0 ^ a1);
+    state[offset + 1] ^= t ^ aesXtime(a1 ^ a2);
+    state[offset + 2] ^= t ^ aesXtime(a2 ^ a3);
+    state[offset + 3] ^= t ^ aesXtime(a3 ^ a0);
+  }
+}
+
+function aesEncryptBlock(block, expanded) {
+  const state = Array.from(block);
+  aesAddRoundKey(state, expanded.words, 0);
+  for (let round = 1; round < expanded.nr; round += 1) {
+    aesSubBytes(state);
+    aesShiftRows(state);
+    aesMixColumns(state);
+    aesAddRoundKey(state, expanded.words, round);
+  }
+  aesSubBytes(state);
+  aesShiftRows(state);
+  aesAddRoundKey(state, expanded.words, expanded.nr);
+  return new Uint8Array(state);
+}
+
+function incrementCounter(counter) {
+  for (let i = 15; i >= 12; i -= 1) {
+    counter[i] = (counter[i] + 1) & 255;
+    if (counter[i] !== 0) break;
+  }
+}
+
+function aesGcmCtrDecryptNoAuth(keyBytes, iv, encryptedWithTag) {
+  const ciphertext = encryptedWithTag.slice(0, Math.max(0, encryptedWithTag.length - 16));
+  const expanded = aesExpandKey(Array.from(keyBytes));
+  const counter = new Uint8Array(16);
+  counter.set(iv, 0);
+  counter[15] = 1;
+  const plain = new Uint8Array(ciphertext.length);
+  for (let offset = 0; offset < ciphertext.length; offset += 16) {
+    incrementCounter(counter);
+    const stream = aesEncryptBlock(counter, expanded);
+    const size = Math.min(16, ciphertext.length - offset);
+    for (let i = 0; i < size; i += 1) plain[offset + i] = ciphertext[offset + i] ^ stream[i];
+  }
+  return plain;
+}
+
+function browserSignatureMessage(input) {
+  return [
+    "ntk-brsig-v1",
+    String(input.method || "POST").toUpperCase(),
+    input.path,
+    input.scope,
+    input.keyId,
+    input.timestamp,
+    input.nonce,
+    input.bodyHash
+  ].join("\n");
+}
+
+const P256_P = BigInt("0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff");
+const P256_A = P256_P - BigInt(3);
+const P256_N = BigInt("0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551");
+const P256_G = {
+  x: BigInt("0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296"),
+  y: BigInt("0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5")
+};
+
+function p256Mod(value, modulo) {
+  const result = value % modulo;
+  return result < BigInt(0) ? result + modulo : result;
+}
+
+function p256Inverse(value, modulo) {
+  let low = p256Mod(value, modulo);
+  let high = modulo;
+  let lowCoeff = BigInt(1);
+  let highCoeff = BigInt(0);
+  while (low > BigInt(1)) {
+    const quotient = high / low;
+    const next = high - low * quotient;
+    high = low;
+    low = next;
+    const nextCoeff = highCoeff - lowCoeff * quotient;
+    highCoeff = lowCoeff;
+    lowCoeff = nextCoeff;
+  }
+  return p256Mod(lowCoeff, modulo);
+}
+
+function p256Double(point) {
+  if (!point || point.y === BigInt(0)) return null;
+  const slope = p256Mod(
+    (BigInt(3) * point.x * point.x + P256_A) * p256Inverse(BigInt(2) * point.y, P256_P),
+    P256_P
+  );
+  const x = p256Mod(slope * slope - BigInt(2) * point.x, P256_P);
+  return { x, y: p256Mod(slope * (point.x - x) - point.y, P256_P) };
+}
+
+function p256Add(first, second) {
+  if (!first) return second;
+  if (!second) return first;
+  if (first.x === second.x) {
+    if (p256Mod(first.y + second.y, P256_P) === BigInt(0)) return null;
+    return p256Double(first);
+  }
+  const slope = p256Mod((second.y - first.y) * p256Inverse(second.x - first.x, P256_P), P256_P);
+  const x = p256Mod(slope * slope - first.x - second.x, P256_P);
+  return { x, y: p256Mod(slope * (first.x - x) - first.y, P256_P) };
+}
+
+function p256Multiply(scalar, point = P256_G) {
+  let value = scalar;
+  let addend = point;
+  let result = null;
+  while (value > BigInt(0)) {
+    if ((value & BigInt(1)) === BigInt(1)) result = p256Add(result, addend);
+    addend = p256Double(addend);
+    value >>= BigInt(1);
+  }
+  return result;
+}
+
+function p256BytesToInt(bytes) {
+  let value = BigInt(0);
+  for (let i = 0; i < bytes.length; i += 1) value = (value << BigInt(8)) + BigInt(bytes[i]);
+  return value;
+}
+
+function p256IntToBytes(value, byteLength = 32) {
+  const output = new Uint8Array(byteLength);
+  let remaining = value;
+  for (let i = byteLength - 1; i >= 0; i -= 1) {
+    output[i] = Number(remaining & BigInt(255));
+    remaining >>= BigInt(8);
+  }
+  return output;
+}
+
+function createP256BrowserKeyPair(entropy) {
+  if (typeof BigInt !== "function") throw new Error("BigInt is required for browser key fallback");
+  const seed = createTextEncoder().encode(String(entropy || `${randomBase64Url(32)}:${Date.now()}:${Math.random()}`));
+  const privateKey = (p256BytesToInt(sha256Bytes(Array.from(seed))) % (P256_N - BigInt(1))) + BigInt(1);
+  const publicPoint = p256Multiply(privateKey);
+  const privateBytes = p256IntToBytes(privateKey);
+  return {
+    publicJwk: {
+      kty: "EC",
+      crv: "P-256",
+      x: base64UrlFromBytes(p256IntToBytes(publicPoint.x)),
+      y: base64UrlFromBytes(p256IntToBytes(publicPoint.y)),
+      ext: true,
+      key_ops: ["verify"]
+    },
+    sign(message) {
+      const messageBytes = Array.from(createTextEncoder().encode(String(message)));
+      const hash = p256BytesToInt(sha256Bytes(messageBytes));
+      for (let attempt = 1; attempt < 256; attempt += 1) {
+        const nonceMaterial = Array.from(privateBytes).concat(messageBytes, [attempt]);
+        const nonce = (p256BytesToInt(sha256Bytes(nonceMaterial)) % (P256_N - BigInt(1))) + BigInt(1);
+        const point = p256Multiply(nonce);
+        const r = p256Mod(point.x, P256_N);
+        if (r === BigInt(0)) continue;
+        const s = p256Mod(p256Inverse(nonce, P256_N) * (hash + r * privateKey), P256_N);
+        if (s === BigInt(0)) continue;
+        const output = new Uint8Array(64);
+        output.set(p256IntToBytes(r), 0);
+        output.set(p256IntToBytes(s), 32);
+        return output;
+      }
+      throw new Error("Unable to produce P-256 signature");
+    }
+  };
+}
+
+async function createBrowserSignedHeaders(client, baseUrl, method, path, scope, bodyText, headers) {
+  if (!/^\/manhwa\/[^/?#]+\/[^/?#]+$/.test(String(scope || ""))) return {};
+  const supportsWebCrypto = typeof crypto !== "undefined" && crypto.subtle && typeof crypto.subtle.generateKey === "function";
+  const purePair = supportsWebCrypto ? null : createP256BrowserKeyPair();
+  const pair = supportsWebCrypto
+    ? await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"])
+    : null;
+  const publicKey = supportsWebCrypto ? await crypto.subtle.exportKey("jwk", pair.publicKey) : purePair.publicJwk;
+  const registerRes = await client.post(
+    joinUrl(baseUrl, "/api/client-key/register"),
+    { ...headers, "content-type": "application/json" },
+    { publicKey }
+  );
+  const registered = JSON.parse(registerRes.body || "{}");
+  if (!registered.ok || !registered.keyId) {
+    throw new Error(`browser key registration failed; ${responseSummary(registerRes)}`);
+  }
+  const clientNow = Date.now();
+  const serverNow = typeof registered.serverNow === "number" ? registered.serverNow : clientNow;
+  const timestamp = String(Math.floor(Date.now() + (serverNow - clientNow)));
+  const nonce = randomBase64Url(24);
+  const bodyHash = await sha256Base64Url(bodyText);
+  const message = browserSignatureMessage({
+    method,
+    path,
+    scope,
+    keyId: registered.keyId,
+    timestamp,
+    nonce,
+    bodyHash
+  });
+  const signature = supportsWebCrypto
+    ? await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, pair.privateKey, createTextEncoder().encode(message))
+    : purePair.sign(message);
+  return {
+    "x-ntk-key-id": registered.keyId,
+    "x-ntk-ts": timestamp,
+    "x-ntk-nonce": nonce,
+    "x-ntk-sig": base64UrlFromBytes(new Uint8Array(signature))
+  };
+}
+
+async function decryptNovelPayload(payload, nvSession, novelId, episodeId) {
+  const data = base64UrlToBytes(payload);
+  if (data.length < 28) throw new Error("Novel payload is too short");
+  const iv = data.slice(0, 12);
+  const body = data.slice(12);
+  const nvKey = base64UrlToBytes(String(nvSession || "").split(".")[0] || "");
+  const tail = createTextEncoder().encode(`:${novelId}:${episodeId}:v3`);
+  const input = new Uint8Array(nvKey.length + tail.length);
+  input.set(nvKey, 0);
+  input.set(tail, nvKey.length);
+  if (typeof crypto !== "undefined" && crypto.subtle) {
+    const hash = await crypto.subtle.digest("SHA-256", input);
+    const key = await crypto.subtle.importKey("raw", hash, { name: "AES-GCM" }, false, ["decrypt"]);
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv, tagLength: 128 }, key, body);
+    return utf8DecodeBytes(new Uint8Array(plain));
+  }
+  const hash = sha256Bytes(Array.from(input));
+  return utf8DecodeBytes(aesGcmCtrDecryptNoAuth(new Uint8Array(hash), iv, body));
+}
+
+function unshuffleParagraphs(shuffled, perm) {
+  if (!Array.isArray(shuffled) || !Array.isArray(perm) || shuffled.length !== perm.length) return shuffled || [];
+  const restored = new Array(shuffled.length);
+  const seen = new Array(shuffled.length).fill(false);
+  for (let i = 0; i < shuffled.length; i += 1) {
+    const originalIndex = perm[i];
+    if (!Number.isInteger(originalIndex) || originalIndex < 0 || originalIndex >= shuffled.length || seen[originalIndex]) return shuffled;
+    seen[originalIndex] = true;
+    restored[originalIndex] = shuffled[i];
+  }
+  return restored;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function renderNovelContentHtml(decoded) {
+  let payload = null;
+  if (decoded && decoded.charAt(0) === "{") {
+    try { payload = JSON.parse(decoded); } catch (e) { payload = null; }
+  }
+  if (payload && payload.kind === "html" && typeof payload.html === "string") {
+    return payload.html;
+  }
+  let paragraphs = [];
+  if (payload && payload.kind === "text-shuffled") paragraphs = unshuffleParagraphs(payload.paragraphs, payload.perm);
+  else if (payload && payload.kind === "text" && Array.isArray(payload.paragraphs)) paragraphs = payload.paragraphs;
+  else paragraphs = String(decoded || "").split(/\n{2,}/);
+  return paragraphs
+    .map((paragraph) => String(paragraph || "").trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+    .join("\n");
 }
 
 function createTextEncoder() {
@@ -641,19 +1094,23 @@ function createNtkSource(options = {}) {
     buildApiUrl(path, params) {
       return appendQuery(joinUrl(baseUrl, path), params || {});
     },
-    __buildPopularUrl(page) {
+    __buildListUrl(page, filters, defaults = {}) {
       return this.buildApiUrl(variant.listEndpoint, {
-        status: "ongoing",
-        sort: "views",
+        status: filterValue(filters, "status", defaults.status || "ongoing"),
+        sort: filterValue(filters, "sort", defaults.sort || "views"),
         page,
         pageSize: 49,
         withTotal: 1
       });
     },
-    __buildLatestUrl(page) {
+    __buildPopularUrl(page, filters) {
+      return this.__buildListUrl(page, filters, { status: "ongoing", sort: "views" });
+    },
+    __buildLatestUrl(page, filters) {
       if (variant.latestEndpoint.startsWith("/api/")) {
         return this.buildApiUrl(variant.latestEndpoint, {
-          status: "ongoing",
+          status: filterValue(filters, "status", "ongoing"),
+          sort: filterValue(filters, "sort", "latest"),
           page,
           pageSize: 49,
           withTotal: 1
@@ -661,11 +1118,14 @@ function createNtkSource(options = {}) {
       }
       return this.buildApiUrl(variant.latestEndpoint, { page });
     },
-    __buildSearchUrl(query, page) {
-      return this.buildApiUrl("/search", {
+    __buildSearchUrl(query, page, filters) {
+      return this.buildApiUrl(variant.listEndpoint, {
         q: query,
-        kind: variant.searchKind,
-        page
+        status: filterValue(filters, "status", "all"),
+        sort: filterValue(filters, "sort", "latest"),
+        page,
+        pageSize: 49,
+        withTotal: 1
       });
     },
     __buildImageCandidates(chapterUrl) {
@@ -691,7 +1151,12 @@ class DefaultExtension extends ProviderBase {
 
   getVariantName() {
     const params = parseAdditionalParams(this.source && this.source.additionalParams);
-    if (params.source) return params.source === "manga" ? "manga" : "webtoon";
+    if (params.source) {
+      if (params.source === "manga") return "manga";
+      if (params.source === "novel") return "novel";
+      return "webtoon";
+    }
+    if (this.source && /novel/i.test(this.source.name)) return "novel";
     return (this.source && /manga/i.test(this.source.name)) ? "manga" : "webtoon";
   }
 
@@ -718,15 +1183,15 @@ class DefaultExtension extends ProviderBase {
     };
   }
 
-  async getPopular(page) {
+  async getPopular(page, filters) {
     const source = this.getSource();
-    const res = await this.client.get(source.__buildPopularUrl(page), this.getHeaders());
+    const res = await this.client.get(source.__buildPopularUrl(page, filters), this.getHeaders());
     return parseWorksResponse(res.body, source.baseUrl, source.variantName);
   }
 
-  async getLatestUpdates(page) {
+  async getLatestUpdates(page, filters) {
     const source = this.getSource();
-    const res = await this.client.get(source.__buildLatestUrl(page), this.getHeaders());
+    const res = await this.client.get(source.__buildLatestUrl(page, filters), this.getHeaders());
     if (source.variant.latestEndpoint.startsWith("/api/")) {
       return parseWorksResponse(res.body, source.baseUrl, source.variantName);
     }
@@ -735,7 +1200,7 @@ class DefaultExtension extends ProviderBase {
 
   async search(query, page, filters) {
     const source = this.getSource();
-    const res = await this.client.get(source.__buildSearchUrl(query, page), this.getHeaders());
+    const res = await this.client.get(source.__buildSearchUrl(query, page, filters), this.getHeaders());
     if ((res.body || "").trim().startsWith("{") || (res.body || "").trim().startsWith("[")) {
       return parseWorksResponse(res.body, source.baseUrl, source.variantName);
     }
@@ -806,22 +1271,33 @@ class DefaultExtension extends ProviderBase {
           const nonce = randomBase64Url(24);
           const proof = await hmacSha256Base64Url(session, `${appCookieBootstrap.imagesToken}.${nonce}`);
           const endpoint = source.variant.imageEndpoint;
+          const imageBody = {
+            workId: appCookieBootstrap.sourceWorkId,
+            episodeId: appCookieBootstrap.episodeId,
+            token: appCookieBootstrap.imagesToken,
+            nonce,
+            proof
+          };
+          const signedHeaders = await createBrowserSignedHeaders(
+            this.client,
+            source.baseUrl,
+            "POST",
+            endpoint,
+            readerPath,
+            JSON.stringify(imageBody),
+            browserHeaders
+          );
           const imageHeaders = {
             ...browserHeaders,
             "content-type": "application/json",
             "x-images-client": "viewer-v1",
-            "x-nv-session": session
+            "x-nv-session": session,
+            ...signedHeaders
           };
           const imageRes = await this.client.post(
             joinUrl(source.baseUrl, endpoint),
             imageHeaders,
-            {
-              workId: appCookieBootstrap.sourceWorkId,
-              episodeId: appCookieBootstrap.episodeId,
-              token: appCookieBootstrap.imagesToken,
-              nonce,
-              proof
-            }
+            imageBody
           );
           try {
             return parsePageImagesResponse(imageRes.body).map((imageUrl) => ({ url: absoluteUrl(source.baseUrl, imageUrl), headers: imageHeaders }));
@@ -889,21 +1365,32 @@ class DefaultExtension extends ProviderBase {
           const nonce = randomBase64Url(24);
           const proof = await hmacSha256Base64Url(session, `${bootstrap.imagesToken}.${nonce}`);
           const endpoint = source.variant.imageEndpoint;
+          const imageBody = {
+            workId: bootstrap.sourceWorkId,
+            episodeId: bootstrap.episodeId,
+            token: bootstrap.imagesToken,
+            nonce,
+            proof
+          };
+          const signedHeaders = await createBrowserSignedHeaders(
+            this.client,
+            source.baseUrl,
+            "POST",
+            endpoint,
+            readerPath,
+            JSON.stringify(imageBody),
+            headersWithCookie(browserHeaders, cookieHeader)
+          );
           const imageRes = await this.client.post(
             joinUrl(source.baseUrl, endpoint),
             {
               ...headersWithCookie(browserHeaders, cookieHeader),
               "content-type": "application/json",
               "x-images-client": "viewer-v1",
-              "x-nv-session": session
+              "x-nv-session": session,
+              ...signedHeaders
             },
-            {
-              workId: bootstrap.sourceWorkId,
-              episodeId: bootstrap.episodeId,
-              token: bootstrap.imagesToken,
-              nonce,
-              proof
-            }
+            imageBody
           );
           try {
             return parsePageImagesResponse(imageRes.body).map((imageUrl) => ({ url: absoluteUrl(source.baseUrl, imageUrl), headers: headersWithCookie(browserHeaders, cookieHeader) }));
@@ -941,13 +1428,101 @@ class DefaultExtension extends ProviderBase {
     throw new Error("Failed to load images, please retry");
   }
 
-  getFilterList() {
-    return [
-      {
-        type_name: "HeaderFilter",
-        name: "Filters are minimal in this Mangayomi port. Text search is supported."
+  async getHtmlContent(name, url) {
+    const source = this.getSource();
+    const headers = this.getHeaders();
+    const readerUrl = joinUrl(source.baseUrl, normalizeSourceUrl(url, source.variantName));
+    const readerPath = pathFromUrl(readerUrl);
+    const browserHeaders = browserFetchHeaders(headers, readerUrl);
+    let cookieHeader = createInitialNtkCookie(headers);
+
+    const readerRes = await this.client.get(readerUrl, headersWithCookie(headers, cookieHeader));
+    cookieHeader = mergeSetCookie(cookieHeader, responseHeader(readerRes, "set-cookie"));
+    const rawViewerData = firstMatch(readerRes.body, /<script[^>]*id=["']theme-novel-viewer-data["'][^>]*>([\s\S]*?)<\/script>/i);
+    if (!rawViewerData) throw new Error("NTK novel viewer data not found");
+    const viewerData = JSON.parse(htmlDecode(rawViewerData));
+
+    const canaryRes = await this.client.post(
+      joinUrl(source.baseUrl, "/api/ad/canary"),
+      { ...headersWithCookie(browserHeaders, cookieHeader), "content-type": "application/json" },
+      { adGuardLoaded: true }
+    );
+    cookieHeader = mergeSetCookie(cookieHeader, responseHeader(canaryRes, "set-cookie"));
+
+    const runChallenge = async (force) => {
+      const challengeRes = await this.client.post(
+        joinUrl(source.baseUrl, "/api/ad/challenge"),
+        { ...headersWithCookie(browserHeaders, cookieHeader), "content-type": "application/json" },
+        { path: readerPath, force: !!force }
+      );
+      cookieHeader = mergeSetCookie(cookieHeader, responseHeader(challengeRes, "set-cookie"));
+      const challengeData = JSON.parse(challengeRes.body || "{}");
+      if (challengeData.challenge && challengeData.challenge.observationBatchUrl) {
+        const challenge = challengeData.challenge;
+        const urls = Array.isArray(challenge.impressionUrls)
+          ? challenge.impressionUrls.slice(0, Math.max(1, Number(challenge.minSeen || 1)))
+          : [];
+        const observationRes = await this.client.post(
+          absoluteUrl(source.baseUrl, challenge.observationBatchUrl),
+          { ...headersWithCookie(browserHeaders, cookieHeader), "content-type": "application/json" },
+          { challengeToken: challenge.token, path: readerPath, urls }
+        );
+        cookieHeader = mergeSetCookie(cookieHeader, responseHeader(observationRes, "set-cookie"));
       }
-    ];
+    };
+    await runChallenge(false);
+
+    const sessionRes = await this.client.post(
+      joinUrl(source.baseUrl, "/api/nv-issue"),
+      headersWithCookie(browserHeaders, cookieHeader),
+      {}
+    );
+    cookieHeader = mergeSetCookie(cookieHeader, responseHeader(sessionRes, "set-cookie"));
+    const sessionData = JSON.parse(sessionRes.body || "{}");
+    const session = sessionData.session;
+    if (!session) throw new Error(`missing novel session; ${responseSummary(sessionRes)}`);
+
+    const requestContent = async () => {
+      const nonce = randomBase64Url(24);
+      const proof = await hmacSha256Base64Url(session, `${viewerData.token}.${nonce}`);
+      return this.client.post(
+        joinUrl(source.baseUrl, "/api/novel-content"),
+        {
+          ...headersWithCookie(browserHeaders, cookieHeader),
+          "content-type": "application/json",
+          "x-novel-client": "shadow-v3",
+          "x-nv-session": session
+        },
+        {
+          novelId: viewerData.novelId,
+          episodeId: viewerData.episodeId,
+          token: viewerData.token,
+          nonce,
+          proof
+        }
+      );
+    };
+
+    let contentRes = await requestContent();
+    let contentData = JSON.parse(contentRes.body || "{}");
+    if (contentRes.statusCode === 403 && (contentData.error === "ad_ack_required" || contentData.error === "fingerprint_required")) {
+      await runChallenge(true);
+      contentRes = await requestContent();
+      contentData = JSON.parse(contentRes.body || "{}");
+    }
+    if (!contentData.ok || !contentData.payload) {
+      throw new Error(`NTK novel content failed; ${responseSummary(contentRes)}`);
+    }
+    const decoded = await decryptNovelPayload(contentData.payload, session, viewerData.novelId, viewerData.episodeId);
+    return renderNovelContentHtml(decoded);
+  }
+
+  async cleanHtmlContent(html) {
+    return html;
+  }
+
+  getFilterList() {
+    return buildFilterList();
   }
 
   getSourcePreferences() {
