@@ -7,13 +7,13 @@ const ntk = ntkModule.__ntkTest;
 test("builds webtoon popular API URL", () => {
   const source = ntk.createNtkSource({ variant: "webtoon" });
   const url = source.__buildPopularUrl(2);
-  assert.equal(url, "https://sbxh9.com/api/works?status=ongoing&sort=views&page=2&pageSize=49&withTotal=1");
+  assert.equal(url, "https://newtoki1.org/api/works?status=ongoing&sort=views&page=2&pageSize=49&withTotal=1");
 });
 
 test("builds manga popular API URL", () => {
   const source = ntk.createNtkSource({ variant: "manga" });
   const url = source.__buildPopularUrl(3);
-  assert.equal(url, "https://sbxh9.com/api/manhwa-list?status=ongoing&sort=views&page=3&pageSize=49&withTotal=1");
+  assert.equal(url, "https://newtoki1.org/api/manhwa-list?status=ongoing&sort=views&page=3&pageSize=49&withTotal=1");
 });
 
 test("parses details HTML selectors recovered from APK", () => {
@@ -53,6 +53,45 @@ test("parses chapter rows", () => {
   ]);
 });
 
+test("parses legacy newtoki detail and chapter rows", () => {
+  const html = `
+    <meta property="og:title" content="연애혁명 - 뉴토끼 웹툰 미리보기">
+    <meta property="og:description" content="연애혁명 일반웹툰. 설명">
+    <meta property="og:image" content="https://aws-cdn1.site/black/thumbs/426.jpg?v2">
+    <div class="view-img"><img src="https://aws-cdn1.site/black/thumbs/426.jpg?v2" alt="연애혁명"></div>
+    <div class="theme-detail-title-line">연애혁명</div>
+    <span class="theme-detail-info-label">작가</span><span class="theme-detail-info-value"><a href="/webtoon?author=232">232</a></span>
+    <span class="theme-detail-info-label">장르</span><span class="theme-detail-info-value">학원, 개그/코미디, 로맨스</span>
+    <span class="theme-detail-info-label">발행구분</span><span class="theme-detail-info-value">연재중</span>
+    <div class="view-content theme-detail-description">작품 설명<br>두 번째 줄</div>
+    <ul class="list-body">
+      <li class="list-item" data-index="442">
+        <div class="wr-subject">
+          <a rel="x" href="/webtoon/570503/1181035" class="item-subject">
+            0443 - 후기<span class="theme-episode-title-metrics"><span>8</span></span>
+          </a>
+        </div>
+        <div class="wr-date hidden-xs">2023.04.26</div>
+      </li>
+    </ul>`;
+  assert.deepEqual(ntk.parseDetailsHtml(html, "https://newtoki1.org"), {
+    title: "연애혁명",
+    author: "232",
+    description: "작품 설명 두 번째 줄",
+    thumbnailUrl: "https://aws-cdn1.site/black/thumbs/426.jpg?v2",
+    status: "ONGOING",
+    genre: "학원, 개그/코미디, 로맨스"
+  });
+  assert.deepEqual(ntk.parseChaptersHtml(html, "https://newtoki1.org"), [
+    {
+      name: "0443 - 후기",
+      url: "/webtoon/570503/1181035",
+      dateUpload: "23.04.26",
+      scanlator: ""
+    }
+  ]);
+});
+
 test("parses image arrays and rejects ad acknowledgment", () => {
   assert.deepEqual(ntk.parsePageImagesResponse(JSON.stringify({ images: ["https://i/1.jpg", { url: "https://i/2.jpg" }] })), [
     "https://i/1.jpg",
@@ -66,6 +105,16 @@ test("detects reader bootstrap token fields", () => {
   assert.deepEqual(ntk.parseReaderBootstrap(html), {
     imagesToken: "abc.def",
     viewerUrl: "https://blacktoon410.com/webtoons/426/1181035.html",
+    sourceWorkId: "570503",
+    episodeId: "1181035"
+  });
+});
+
+test("detects legacy reader token field", () => {
+  const html = String.raw`{"sourceWorkId":"570503","episodeId":"1181035","token":"legacy.token","imageApiPath":"\/api\/webtoon-images"}`;
+  assert.deepEqual(ntk.parseReaderBootstrap(html), {
+    imagesToken: "legacy.token",
+    viewerUrl: "",
     sourceWorkId: "570503",
     episodeId: "1181035"
   });

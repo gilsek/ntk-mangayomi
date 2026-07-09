@@ -3,9 +3,9 @@ const mangayomiSources = [
     id: 240710001,
     name: "NTK Webtoon",
     lang: "ko",
-    baseUrl: "https://sbxh9.com",
+    baseUrl: "https://newtoki1.org",
     apiUrl: "",
-    iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://sbxh9.com",
+    iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
     version: "0.1.0",
@@ -20,9 +20,9 @@ const mangayomiSources = [
     id: 240710002,
     name: "NTK Manga",
     lang: "ko",
-    baseUrl: "https://sbxh9.com",
+    baseUrl: "https://newtoki1.org",
     apiUrl: "",
-    iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://sbxh9.com",
+    iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
     version: "0.1.0",
@@ -96,7 +96,7 @@ function htmlDecode(value) {
 }
 
 function stripTags(value) {
-  return htmlDecode(String(value || "").replace(/<[^>]*>/g, ""))
+  return htmlDecode(String(value || "").replace(/<br\s*\/?>/gi, " ").replace(/<[^>]*>/g, ""))
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -130,19 +130,33 @@ function allMatches(html, regex) {
 }
 
 function parseStatus(text) {
-  if (String(text || "").includes("연재중")) return 0;
-  if (String(text || "").includes("완결")) return 1;
+  if (/연재|ongoing/i.test(String(text || ""))) return 0;
+  if (/완결|complete/i.test(String(text || ""))) return 1;
   return 5;
 }
 
 function parseDetailsHtml(html, baseUrl) {
-  const title = stripTags(firstMatch(html, /<h1[^>]*class=["'][^"']*hero-v2-title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i));
-  const author = stripTags(firstMatch(html, /<div[^>]*class=["'][^"']*hero-v2-author[^"']*["'][^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/i));
-  const description = stripTags(firstMatch(html, /<p[^>]*class=["'][^"']*hero-v2-desc[^"']*["'][^>]*>([\s\S]*?)<\/p>/i));
+  const metaTitle = htmlDecode(attrValue(firstMatch(html, /(<meta[^>]*property=["']og:title["'][^>]*>)/i), "content")).replace(/\s+-\s+뉴토끼[\s\S]*$/i, "");
+  const metaDescription = htmlDecode(attrValue(firstMatch(html, /(<meta[^>]*(?:property=["']og:description["']|name=["']description["'])[^>]*>)/i), "content"));
+  const metaImage = attrValue(firstMatch(html, /(<meta[^>]*property=["']og:image["'][^>]*>)/i), "content");
+  const title = stripTags(firstMatch(html, /<h1[^>]*class=["'][^"']*hero-v2-title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i))
+    || stripTags(firstMatch(html, /<div[^>]*class=["'][^"']*theme-detail-title-line[^"']*["'][^>]*>([\s\S]*?)<\/div>/i))
+    || metaTitle;
+  const author = stripTags(firstMatch(html, /<div[^>]*class=["'][^"']*hero-v2-author[^"']*["'][^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/i))
+    || stripTags(firstMatch(html, /<span[^>]*class=["'][^"']*theme-detail-info-label[^"']*["'][^>]*>\s*작가\s*<\/span>\s*<span[^>]*class=["'][^"']*theme-detail-info-value[^"']*["'][^>]*>([\s\S]*?)<\/span>/i));
+  const description = stripTags(firstMatch(html, /<p[^>]*class=["'][^"']*hero-v2-desc[^"']*["'][^>]*>([\s\S]*?)<\/p>/i))
+    || stripTags(firstMatch(html, /<div[^>]*class=["'][^"']*theme-detail-description[^"']*["'][^>]*>([\s\S]*?)<\/div>/i))
+    || metaDescription;
   const thumbTag = firstMatch(html, /<div[^>]*class=["'][^"']*hero-v2-thumb[^"']*["'][^>]*>[\s\S]*?(<img[^>]*>)/i);
-  const thumbnailUrl = absoluteUrl(baseUrl, attrValue(thumbTag, "src") || attrValue(thumbTag, "data-src"));
-  const statusText = stripTags(firstMatch(html, /<span[^>]*class=["'][^"']*pill-status[^"']*["'][^>]*>([\s\S]*?)<\/span>/i));
+  const legacyThumbTag = firstMatch(html, /<div[^>]*class=["'][^"']*view-img[^"']*["'][^>]*>[\s\S]*?(<img[^>]*>)/i);
+  const thumbnailUrl = absoluteUrl(baseUrl, attrValue(thumbTag, "src") || attrValue(thumbTag, "data-src") || attrValue(legacyThumbTag, "src") || attrValue(legacyThumbTag, "data-src") || metaImage);
+  const statusText = stripTags(firstMatch(html, /<span[^>]*class=["'][^"']*pill-status[^"']*["'][^>]*>([\s\S]*?)<\/span>/i))
+    || stripTags(firstMatch(html, /<span[^>]*class=["'][^"']*theme-detail-info-label[^"']*["'][^>]*>\s*발행구분\s*<\/span>\s*<span[^>]*class=["'][^"']*theme-detail-info-value[^"']*["'][^>]*>([\s\S]*?)<\/span>/i));
   const genres = allMatches(html, /<a[^>]*class=["'][^"']*hero-v2-tag[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi).map(stripTags).filter(Boolean);
+  if (genres.length === 0) {
+    const legacyGenre = stripTags(firstMatch(html, /<span[^>]*class=["'][^"']*theme-detail-info-label[^"']*["'][^>]*>\s*장르\s*<\/span>\s*<span[^>]*class=["'][^"']*theme-detail-info-value[^"']*["'][^>]*>([\s\S]*?)<\/span>/i));
+    if (legacyGenre) genres.push(...legacyGenre.split(/\s*,\s*/).filter(Boolean));
+  }
 
   return {
     title,
@@ -155,12 +169,24 @@ function parseDetailsHtml(html, baseUrl) {
 }
 
 function parseChaptersHtml(html, baseUrl) {
-  const rows = allMatches(html, /<li[^>]*class=["'][^"']*ep-row-v2[^"']*["'][^>]*>([\s\S]*?)<\/li>/gi);
+  let rows = allMatches(html, /<li[^>]*class=["'][^"']*ep-row-v2[^"']*["'][^>]*>([\s\S]*?)<\/li>/gi);
+  let legacy = false;
+  if (rows.length === 0) {
+    rows = allMatches(html, /<li[^>]*class=["'][^"']*list-item[^"']*["'][^>]*>([\s\S]*?)<\/li>/gi);
+    legacy = true;
+  }
   return rows.map((row) => {
-    const linkTag = firstMatch(row, /(<a[^>]*class=["'][^"']*ep-row-v2-link[^"']*["'][^>]*>)/i);
+    const linkTag = legacy
+      ? firstMatch(row, /(<a[^>]*class=["'][^"']*item-subject[^"']*["'][^>]*>)/i)
+      : firstMatch(row, /(<a[^>]*class=["'][^"']*ep-row-v2-link[^"']*["'][^>]*>)/i);
     const href = attrValue(linkTag, "href");
-    const name = stripTags(firstMatch(row, /<div[^>]*class=["'][^"']*ep-row-v2-title[^"']*["'][^>]*>[\s\S]*?<strong[^>]*>([\s\S]*?)<\/strong>/i));
-    const dateUpload = stripTags(firstMatch(row, /<span[^>]*class=["'][^"']*ep-row-v2-date[^"']*["'][^>]*>([\s\S]*?)<\/span>/i));
+    const legacyTitle = firstMatch(row, /<a[^>]*class=["'][^"']*item-subject[^"']*["'][^>]*>([\s\S]*?)<\/a>/i).replace(/<span[^>]*class=["'][^"']*theme-episode-title-metrics[^"']*["'][^>]*>[\s\S]*$/i, "");
+    const name = legacy
+      ? stripTags(legacyTitle)
+      : stripTags(firstMatch(row, /<div[^>]*class=["'][^"']*ep-row-v2-title[^"']*["'][^>]*>[\s\S]*?<strong[^>]*>([\s\S]*?)<\/strong>/i));
+    const dateUpload = legacy
+      ? stripTags(firstMatch(row, /<div[^>]*class=["'][^"']*wr-date[^"']*["'][^>]*>([\s\S]*?)<\/div>/i))
+      : stripTags(firstMatch(row, /<span[^>]*class=["'][^"']*ep-row-v2-date[^"']*["'][^>]*>([\s\S]*?)<\/span>/i));
     const locked = /class=["'][^"']*ep-price-badge/i.test(row);
     return {
       name: locked && name ? `${name} 🔒` : name,
@@ -174,9 +200,9 @@ function parseChaptersHtml(html, baseUrl) {
 
 function toEpochMillis(text) {
   const value = String(text || "").trim();
-  const match = value.match(/^(\d{2})\.(\d{1,2})\.(\d{1,2})$/);
+  const match = value.match(/^(\d{2}|\d{4})\.(\d{1,2})\.(\d{1,2})$/);
   if (!match) return null;
-  const year = 2000 + Number(match[1]);
+  const year = match[1].length === 2 ? 2000 + Number(match[1]) : Number(match[1]);
   const month = Number(match[2]) - 1;
   const day = Number(match[3]);
   return String(new Date(year, month, day).valueOf());
@@ -254,7 +280,7 @@ function parseReaderBootstrap(html) {
     return text.slice(start, end).replace(/\\"/g, "\"").replace(/\\\//g, "/");
   };
   return {
-    imagesToken: readField("imagesToken"),
+    imagesToken: readField("imagesToken") || readField("token"),
     viewerUrl: htmlDecode(readField("viewerUrl")),
     sourceWorkId: readField("sourceWorkId"),
     episodeId: readField("episodeId")
@@ -406,7 +432,7 @@ function hmacSha256Bytes(secret, message) {
 function createNtkSource(options = {}) {
   const variantName = options.variant || "webtoon";
   const variant = VARIANTS[variantName] || VARIANTS.webtoon;
-  const baseUrl = trimSlash(options.baseUrl || "https://sbxh9.com");
+  const baseUrl = trimSlash(options.baseUrl || "https://newtoki1.org");
 
   return {
     variantName,
@@ -469,7 +495,7 @@ class DefaultExtension extends ProviderBase {
   }
 
   getBaseUrl() {
-    const fallback = trimSlash((this.source && this.source.baseUrl) || "https://sbxh9.com");
+    const fallback = trimSlash((this.source && this.source.baseUrl) || "https://newtoki1.org");
     if (typeof SharedPreferences === "undefined") return fallback;
     const prefs = new SharedPreferences();
     return trimSlash(prefs.get("ntkBaseUrl") || fallback);
@@ -574,7 +600,7 @@ class DefaultExtension extends ProviderBase {
           if (!session) throw new Error("missing session");
           const nonce = randomBase64Url(24);
           const proof = await hmacSha256Base64Url(session, `${bootstrap.imagesToken}.${nonce}`);
-          const endpoint = source.variantName === "manga" ? "/api/manga-images" : "/api/webtoon-images";
+          const endpoint = source.variant.imageEndpoint;
           const imageRes = await this.client.post(
             joinUrl(source.baseUrl, endpoint),
             {
@@ -629,10 +655,10 @@ class DefaultExtension extends ProviderBase {
         key: "ntkBaseUrl",
         editTextPreference: {
           title: "Override BaseUrl",
-          summary: "Current NTK domain, for example https://sbxh9.com",
-          value: "https://sbxh9.com",
+          summary: "Current NTK domain, for example https://newtoki1.org",
+          value: "https://newtoki1.org",
           dialogTitle: "Override BaseUrl",
-          dialogMessage: "Change this when the sbxh domain number changes."
+          dialogMessage: "Change this when the Newtoki domain changes."
         }
       }
     ];

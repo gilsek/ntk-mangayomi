@@ -42,6 +42,6 @@ with the real raw URL.
 ## Current limitation
 
 List, search, detail, and chapter parsing are implemented.
-Reader image loading implements NTK's current `/api/nv-issue` session and HMAC proof flow for `/api/webtoon-images` and `/api/manga-images`.
+Reader image loading implements NTK's current `/api/nv-issue` session and HMAC proof flow for `/api/webtoon-images` and `/api/manhwa-images`.
 Live verification still returns `fingerprint_required` outside a browser-like runtime, so the final reader path may need Mangayomi WebView/browser fingerprint support.
 This JavaScript port reports that server response clearly instead of silently returning empty pages.
