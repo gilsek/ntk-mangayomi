@@ -43,6 +43,6 @@ with the real raw URL.
 
 List, search, detail, chapter parsing, and native reader image loading are implemented for `NTK Webtoon`.
 Reader image loading follows NTK's current `/api/nv-issue` session and HMAC proof flow and sends browser-like same-origin headers for the image API request.
-Version `0.1.5` was verified in Mangayomi v0.7.80 against `https://newtoki1.org` with `연애혁명 0443 - 후기`; the native reader displayed page `1 / 152`.
+Version `0.1.9` was verified in Mangayomi v0.7.80 against `https://newtoki1.org` with `NTK Webtoon`; the native reader displayed chapter images.
 
-`NTK Manga` shares the same parser, but `/api/manhwa-images` may require Newtoki's browser request-key signing path for some titles. If a manga title is blocked, the app-side WebView/browser bridge may still be needed.
+`NTK Manga` shares the same parser but uses the live Manatoki detail route `/manhwa/{sourceWorkId}`. The old `/manga/{sourceWorkId}` path returns a maintenance page on `newtoki1.org`; cached URLs from older extension versions are normalized to `/manhwa/{sourceWorkId}` before detail and reader requests.

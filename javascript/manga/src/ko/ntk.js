@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.1.5",
+    version: "0.1.9",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -25,7 +25,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.1.5",
+    version: "0.1.9",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -126,6 +126,11 @@ function pathFromUrl(value) {
   const noHash = text.split("#")[0];
   const noQuery = noHash.split("?")[0];
   return noQuery || "/";
+}
+
+function normalizeSourceUrl(url, variantName) {
+  if (variantName !== "manga") return url;
+  return String(url || "").replace(/(^https?:\/\/[^/]+)?\/manga(?=\/|$)/i, "$1/manhwa");
 }
 
 function firstMatch(html, regex) {
@@ -242,7 +247,7 @@ function fieldOf(item, names) {
 
 function parseWorksResponse(body, baseUrl, variantName = "webtoon") {
   const data = typeof body === "string" ? JSON.parse(body) : body;
-  const routePrefix = variantName === "manga" ? "/manga" : "/webtoon";
+  const routePrefix = variantName === "manga" ? "/manhwa" : "/webtoon";
   const list = pickArray(data).map((item) => {
     const sourceWorkId = fieldOf(item, ["sourceWorkId", "id", "workId", "hid", "slug"]);
     const rawUrl = fieldOf(item, ["url", "href", "path", "link"]);
@@ -275,6 +280,10 @@ function parsePageImagesResponse(body) {
   }).filter(Boolean);
   if (urls.length === 0) throw new Error("Failed to load images, please retry");
   return urls;
+}
+
+function isMaintenanceHtml(body) {
+  return /점검중|maintenance|잠시 후 다시 시도/i.test(String(body || ""));
 }
 
 function parseWebviewImageResponse(result) {
@@ -660,7 +669,8 @@ function createNtkSource(options = {}) {
       });
     },
     __buildImageCandidates(chapterUrl) {
-      const path = chapterUrl.startsWith("http") ? pathFromUrl(chapterUrl) : chapterUrl;
+      const normalizedUrl = normalizeSourceUrl(chapterUrl, variantName);
+      const path = normalizedUrl.startsWith("http") ? pathFromUrl(normalizedUrl) : normalizedUrl;
       const parts = path.split("/").filter(Boolean);
       const workId = parts[1] || "";
       const episodeId = parts[parts.length - 1] || "";
@@ -750,8 +760,11 @@ class DefaultExtension extends ProviderBase {
 
   async getDetail(url) {
     const source = this.getSource();
-    const detailUrl = joinUrl(source.baseUrl, url);
+    const detailUrl = joinUrl(source.baseUrl, normalizeSourceUrl(url, source.variantName));
     const res = await this.client.get(detailUrl, this.getHeaders());
+    if (isMaintenanceHtml(res.body)) {
+      throw new Error("NTK manga section is under maintenance; please retry later");
+    }
     const details = parseDetailsHtml(res.body, source.baseUrl);
     const chapters = parseChaptersHtml(res.body, source.baseUrl);
     return {
@@ -770,7 +783,7 @@ class DefaultExtension extends ProviderBase {
     const source = this.getSource();
     const headers = this.getHeaders();
     headers["X-WebView-Intercept"] = "true";
-    const readerUrl = joinUrl(source.baseUrl, url);
+    const readerUrl = joinUrl(source.baseUrl, normalizeSourceUrl(url, source.variantName));
     const readerPath = pathFromUrl(readerUrl);
     const browserHeaders = browserFetchHeaders(headers, readerUrl);
     let cookieHeader = createInitialNtkCookie(headers);
@@ -979,7 +992,9 @@ if (typeof module !== "undefined") {
         }));
       },
       parseWorksResponse,
+      normalizeSourceUrl,
       parsePageImagesResponse,
+      isMaintenanceHtml,
       parseWebviewImageResponse,
       createWebviewImageExtractorScript,
       browserFetchHeaders,

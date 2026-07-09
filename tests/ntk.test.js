@@ -108,6 +108,11 @@ test("parses WebView image extraction payloads", () => {
   assert.throws(() => ntk.parseWebviewImageResponse(JSON.stringify({ ok: false, error: "blocked" })), /blocked/);
 });
 
+test("detects NTK maintenance pages", () => {
+  assert.equal(ntk.isMaintenanceHtml("<title>잠시 점검중</title><p>잠시 후 다시 시도해 주세요.</p>"), true);
+  assert.equal(ntk.isMaintenanceHtml("<html><title>normal</title></html>"), false);
+});
+
 test("builds WebView extractor script and browser-like headers", () => {
   const script = ntk.createWebviewImageExtractorScript();
   assert.match(script, /theme-viewer-images/);
@@ -202,7 +207,13 @@ test("parses live-shaped works API response into source routes", () => {
   });
 
   const manga = ntk.parseWorksResponse(body, "https://sbxh9.com", "manga");
-  assert.equal(manga.list[0].link, "/manga/570503");
+  assert.equal(manga.list[0].link, "/manhwa/570503");
+});
+
+test("normalizes cached manga routes from old extension versions", () => {
+  assert.equal(ntk.normalizeSourceUrl("/manga/u-moo1unxn-b4jo", "manga"), "/manhwa/u-moo1unxn-b4jo");
+  assert.equal(ntk.normalizeSourceUrl("https://newtoki1.org/manga/2", "manga"), "https://newtoki1.org/manhwa/2");
+  assert.equal(ntk.normalizeSourceUrl("/webtoon/570503", "webtoon"), "/webtoon/570503");
 });
 
 test("repository manifests are consistent", () => {
