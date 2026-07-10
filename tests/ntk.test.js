@@ -23,10 +23,22 @@ test("builds source-specific filters from the live NTK search forms", () => {
 
   extension.source = { additionalParams: "source=webtoon" };
   const webtoon = extension.getFilterList();
-  assert.deepEqual(webtoon.map((filter) => filter.type), ["author", "weekday", "initial", "platform", "status", "genre", "sort"]);
+  assert.deepEqual(webtoon.map((filter) => filter.type), ["author", "weekday", "initial", "platform", "category", "status", "genre", "sort"]);
+  assert.deepEqual(
+    webtoon.find((filter) => filter.type === "category").values.map((option) => [option.name, option.value]),
+    [
+      ["\uC77C\uBC18\uC6F9\uD230", ""],
+      ["\uC131\uC778\uC6F9\uD230", "\uC131\uC778\uC6F9\uD230"],
+      ["BL/GL", "BL/GL"],
+      ["\uC644\uACB0\uC6F9\uD230", "\uC644\uACB0\uC6F9\uD230"]
+    ]
+  );
   assert.deepEqual(webtoon.find((filter) => filter.type === "weekday").values.map((option) => option.name), ["전체", "월", "화", "수", "목", "금", "토", "일", "열흘"]);
   assert.ok(webtoon.find((filter) => filter.type === "platform").values.some((option) => option.name === "네이버" && option.value === "1"));
-  assert.ok(webtoon.find((filter) => filter.type === "genre").values.some((option) => option.name === "BLGL"));
+  assert.deepEqual(
+    webtoon.find((filter) => filter.type === "genre").values.map((option) => option.value),
+    ["", "\uD310\uD0C0\uC9C0", "\uC561\uC158", "\uAC1C\uADF8", "\uBBF8\uC2A4\uD130\uB9AC", "\uB85C\uB9E8\uC2A4", "\uB4DC\uB77C\uB9C8", "\uBB34\uD611", "\uC2A4\uD3EC\uCE20", "\uC77C\uC0C1", "\uD559\uC6D0"]
+  );
 
   extension.source = { additionalParams: "source=manga" };
   const manga = extension.getFilterList();
@@ -55,6 +67,18 @@ test("defaults title search to all statuses", () => {
     ),
     /[?&]pub=all(?:&|$)/,
   );
+});
+
+test("uses the webtoon top-level category for list requests", () => {
+  const extension = new ntkModule.DefaultExtension();
+  extension.source = { additionalParams: "source=webtoon" };
+  const filters = extension.getFilterList();
+  filters.find((filter) => filter.type === "category").state = 1;
+
+  const url = ntk.createNtkSource({ variant: "webtoon" }).__buildPopularUrl(2, filters);
+
+  assert.match(url, /^https:\/\/newtoki1\.org\/webtoon\?/);
+  assert.match(url, /[?&]toon=%EC%84%B1%EC%9D%B8%EC%9B%B9%ED%88%B0(?:&|$)/);
 });
 
 test("builds title search and complete filter URLs against HTML list pages", () => {
@@ -509,7 +533,7 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.3.1", "0.3.1", "0.3.3"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.3.2", "0.3.2", "0.3.4"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
   for (const source of index) {
     assert.equal(source.sourceCodeLanguage, 1);

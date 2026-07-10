@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.3.0",
+    version: "0.3.2",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -25,7 +25,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.3.0",
+    version: "0.3.2",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -42,7 +42,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 2,
-    version: "0.3.2",
+    version: "0.3.4",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -536,16 +536,24 @@ const SORT_FILTER_OPTIONS = [
   ["조회순", "as_view"], ["평점순", "as_rating"], ["화수순", "as_episode"]
 ];
 
-const WEBTOON_GENRES = ["판타지", "액션", "개그", "미스터리", "로맨스", "드라마", "무협", "스포츠", "일상", "학원", "성인", "BLGL", "한국", "중국"];
+const WEBTOON_GENRES = ["판타지", "액션", "개그", "미스터리", "로맨스", "드라마", "무협", "스포츠", "일상", "학원"];
 const MANGA_GENRES = ["17", "BL", "SF", "TS", "개그", "게임", "도박", "드라마", "라노벨", "러브코미디", "먹방", "백합", "보추", "순정", "스릴러", "스포츠", "시대", "애니화", "액션", "음악", "이세계", "일상", "전생", "추리", "판타지", "학원", "호러"];
 const NOVEL_GENRES = ["판타지", "무협", "19금", "현대", "로맨스", "로맨스 판타지", "BL", "라노벨", "기타"];
+
+const WEBTOON_CATEGORIES = [
+  ["\uC77C\uBC18\uC6F9\uD230", ""],
+  ["\uC131\uC778\uC6F9\uD230", "\uC131\uC778\uC6F9\uD230"],
+  ["BL/GL", "BL/GL"],
+  ["\uC644\uACB0\uC6F9\uD230", "\uC644\uACB0\uC6F9\uD230"]
+];
 
 function genreOptions(genres) {
   return [["전체", ""], ...genres.map((genre) => [genre, genre])];
 }
 
 function buildFilterList(variantName = "webtoon") {
-  const commonTail = (genres) => [
+  const commonTail = (genres, categoryOptions) => [
+    ...(categoryOptions ? [selectFilter("category", "\uB300\uCE74\uD14C\uACE0\uB9AC", categoryOptions)] : []),
     selectFilter("status", "상태", STATUS_FILTER_OPTIONS, 0),
     selectFilter("genre", "장르", genreOptions(genres)),
     selectFilter("sort", "정렬", SORT_FILTER_OPTIONS)
@@ -583,7 +591,7 @@ function buildFilterList(variantName = "webtoon") {
       ["탑툰", "6"], ["코미카", "7"], ["배틀코믹스", "8"], ["케이툰", "10"],
       ["피너툰", "13"], ["봄툰", "14"], ["코미코", "15"], ["기타", "99"]
     ]),
-    ...commonTail(WEBTOON_GENRES)
+    ...commonTail(WEBTOON_GENRES, WEBTOON_CATEGORIES)
   ];
 }
 
@@ -1209,7 +1217,26 @@ function createNtkSource(options = {}) {
     buildApiUrl(path, params) {
       return appendQuery(joinUrl(baseUrl, path), params || {});
     },
+    __buildHtmlListUrl(page, filters, defaults = {}) {
+      return this.buildApiUrl(variant.listPage, {
+        kind: variant.kind,
+        toon: filterValue(filters, "category", ""),
+        stx: "",
+        [variant.authorField]: filterTextValue(filters, variant.authorField),
+        yoil: filterValue(filters, "weekday", ""),
+        jaum: filterValue(filters, "initial", ""),
+        plat: filterValue(filters, "platform", ""),
+        pub: filterValue(filters, "status", defaults.status || "ongoing"),
+        tag: filterValue(filters, "genre", ""),
+        sst: filterValue(filters, "sort", defaults.sort || "as_update"),
+        sod: "desc",
+        page
+      });
+    },
     __buildListUrl(page, filters, defaults = {}) {
+      if (variantName === "webtoon" && filterValue(filters, "category", "")) {
+        return this.__buildHtmlListUrl(page, filters, defaults);
+      }
       return this.buildApiUrl(variant.listEndpoint, {
         status: filterValue(filters, "status", defaults.status || "ongoing"),
         sort: filterValue(filters, "sort", defaults.sort || "views"),
@@ -1222,6 +1249,9 @@ function createNtkSource(options = {}) {
       return this.__buildListUrl(page, filters, { status: "ongoing", sort: "views" });
     },
     __buildLatestUrl(page, filters) {
+      if (variantName === "webtoon" && filterValue(filters, "category", "")) {
+        return this.__buildHtmlListUrl(page, filters, { status: "ongoing", sort: "as_update" });
+      }
       if (variant.latestEndpoint.startsWith("/api/")) {
         return this.buildApiUrl(variant.latestEndpoint, {
           status: filterValue(filters, "status", "ongoing"),
@@ -1236,6 +1266,7 @@ function createNtkSource(options = {}) {
     __buildSearchUrl(query, page, filters) {
       return this.buildApiUrl(variant.listPage, {
         kind: variant.kind,
+        toon: filterValue(filters, "category", ""),
         stx: String(query || "").trim(),
         [variant.authorField]: filterTextValue(filters, variant.authorField),
         yoil: filterValue(filters, "weekday", ""),
@@ -1305,14 +1336,18 @@ class DefaultExtension extends ProviderBase {
 
   async getPopular(page, filters) {
     const source = this.getSource();
-    const res = await this.client.get(source.__buildPopularUrl(page, filters), this.getHeaders());
-    return parseWorksResponse(res.body, source.baseUrl, source.variantName);
+    const url = source.__buildPopularUrl(page, filters);
+    const res = await this.client.get(url, this.getHeaders());
+    return url.includes("/api/")
+      ? parseWorksResponse(res.body, source.baseUrl, source.variantName)
+      : this.parseMangaCards(res.body, source.baseUrl);
   }
 
   async getLatestUpdates(page, filters) {
     const source = this.getSource();
-    const res = await this.client.get(source.__buildLatestUrl(page, filters), this.getHeaders());
-    if (source.variant.latestEndpoint.startsWith("/api/")) {
+    const url = source.__buildLatestUrl(page, filters);
+    const res = await this.client.get(url, this.getHeaders());
+    if (url.includes("/api/")) {
       return parseWorksResponse(res.body, source.baseUrl, source.variantName);
     }
     return this.parseMangaCards(res.body, source.baseUrl);
