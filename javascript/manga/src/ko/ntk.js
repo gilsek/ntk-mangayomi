@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.3.2",
+    version: "0.3.3",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -25,7 +25,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.3.2",
+    version: "0.3.3",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -106,6 +106,16 @@ function appendQuery(url, params) {
   }
   if (pairs.length === 0) return url;
   return `${url}${url.includes("?") ? "&" : "?"}${pairs.join("&")}`;
+}
+
+function canonicalQueryUrl(url, params) {
+  const pairs = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+  if (pairs.length === 0) return url;
+  const encoded = base64UrlFromBytes(createTextEncoder().encode(pairs.join("&")));
+  return `${trimSlash(url)}/__q/${encoded}`;
 }
 
 function parseAdditionalParams(params) {
@@ -1217,7 +1227,7 @@ function createNtkSource(options = {}) {
       return appendQuery(joinUrl(baseUrl, path), params || {});
     },
     __buildHtmlListUrl(page, filters, defaults = {}) {
-      return this.buildApiUrl(variant.listPage, {
+      return canonicalQueryUrl(joinUrl(baseUrl, variant.listPage), {
         kind: variant.kind,
         toon: filterValue(filters, "category", ""),
         stx: "",

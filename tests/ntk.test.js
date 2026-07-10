@@ -77,8 +77,11 @@ test("uses the webtoon top-level category for list requests", () => {
 
   const url = ntk.createNtkSource({ variant: "webtoon" }).__buildPopularUrl(2, filters);
 
-  assert.match(url, /^https:\/\/newtoki1\.org\/webtoon\?/);
-  assert.match(url, /[?&]toon=%EC%84%B1%EC%9D%B8%EC%9B%B9%ED%88%B0(?:&|$)/);
+  assert.match(url, /^https:\/\/newtoki1\.org\/webtoon\/__q\//);
+  assert.equal(
+    Buffer.from(url.split("/__q/")[1], "base64url").toString("utf8"),
+    "kind=webtoon&page=2&pub=all&sod=desc&sst=as_update&toon=%EC%84%B1%EC%9D%B8%EC%9B%B9%ED%88%B0"
+  );
 });
 
 test("builds title search and complete filter URLs against HTML list pages", () => {
@@ -541,7 +544,7 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.3.2", "0.3.2", "0.3.4"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.3.3", "0.3.3", "0.3.4"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
   for (const source of index) {
     assert.equal(source.sourceCodeLanguage, 1);
@@ -553,5 +556,6 @@ test("repository manifests are consistent", () => {
 test("embedded mangayomiSources match repository index", () => {
   const index = JSON.parse(fs.readFileSync("index.json", "utf8"));
   assert.deepEqual(ntkModule.mangayomiSources.map((source) => source.name), index.map((source) => source.name));
+  assert.deepEqual(ntkModule.mangayomiSources.map((source) => source.version), index.map((source) => source.version));
   assert.deepEqual(ntkModule.mangayomiSources.map((source) => source.additionalParams), index.map((source) => source.additionalParams));
 });
