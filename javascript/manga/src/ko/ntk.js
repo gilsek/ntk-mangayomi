@@ -42,7 +42,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 2,
-    version: "0.3.0",
+    version: "0.3.1",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -1086,7 +1086,7 @@ function renderNovelContentHtml(decoded) {
   return paragraphs
     .map((paragraph) => String(paragraph || "").trim())
     .filter(Boolean)
-    .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\r\n?|\n/g, "<br>")}</p>`)
     .join("\n");
 }
 

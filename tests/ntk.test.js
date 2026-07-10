@@ -438,6 +438,21 @@ test("parses live-shaped novel API response into novel routes", () => {
   assert.equal(result.list[0].link, "/novel/62101");
 });
 
+test("preserves line breaks inside novel paragraphs", () => {
+  const source = fs.readFileSync("javascript/manga/src/ko/ntk.js", "utf8");
+  const sandbox = { module: { exports: {} }, Array, String, JSON };
+  vm.runInNewContext(`${source}\nmodule.exports = { renderNovelContentHtml };`, sandbox);
+  const decoded = JSON.stringify({
+    kind: "text",
+    paragraphs: ["첫 번째 문장.\n두 번째 문장.", "다음 문단."]
+  });
+
+  assert.equal(
+    sandbox.module.exports.renderNovelContentHtml(decoded),
+    "<p>첫 번째 문장.<br>두 번째 문장.</p>\n<p>다음 문단.</p>"
+  );
+});
+
 test("normalizes cached manga routes from old extension versions", () => {
   assert.equal(ntk.normalizeSourceUrl("/manga/u-moo1unxn-b4jo", "manga"), "/manhwa/u-moo1unxn-b4jo");
   assert.equal(ntk.normalizeSourceUrl("https://newtoki1.org/manga/2", "manga"), "https://newtoki1.org/manhwa/2");
@@ -462,7 +477,7 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.3.0", "0.3.0", "0.3.0"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.3.0", "0.3.0", "0.3.1"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
   for (const source of index) {
     assert.equal(source.sourceCodeLanguage, 1);
