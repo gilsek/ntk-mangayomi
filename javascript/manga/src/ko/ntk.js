@@ -546,7 +546,7 @@ function genreOptions(genres) {
 
 function buildFilterList(variantName = "webtoon") {
   const commonTail = (genres) => [
-    selectFilter("status", "상태", STATUS_FILTER_OPTIONS, 1),
+    selectFilter("status", "상태", STATUS_FILTER_OPTIONS, 0),
     selectFilter("genre", "장르", genreOptions(genres)),
     selectFilter("sort", "정렬", SORT_FILTER_OPTIONS)
   ];
@@ -563,7 +563,7 @@ function buildFilterList(variantName = "webtoon") {
     return [
       textFilter("author", "작가"),
       selectFilter("initial", "초성", INITIAL_FILTER_OPTIONS),
-      selectFilter("status", "상태", STATUS_FILTER_OPTIONS, 1),
+      selectFilter("status", "상태", STATUS_FILTER_OPTIONS, 0),
       selectFilter("genre", "장르", genreOptions(NOVEL_GENRES)),
       selectFilter("platform", "플랫폼", [
         ["전체", ""], ["직접 업로드", "user"], ["노벨피아", "novelpia"], ["북토끼", "booktoki"],

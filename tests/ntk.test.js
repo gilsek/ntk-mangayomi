@@ -40,6 +40,23 @@ test("builds source-specific filters from the live NTK search forms", () => {
   assert.deepEqual(novel.find((filter) => filter.type === "sort").values.map((option) => option.name), ["최신순", "신작순", "북마크순", "조회순", "평점순", "화수순"]);
 });
 
+test("defaults title search to all statuses", () => {
+  const extension = new ntkModule.DefaultExtension();
+  extension.source = { additionalParams: "source=manga" };
+  const filters = extension.getFilterList();
+  const status = filters.find((filter) => filter.type === "status");
+
+  assert.equal(status.state, 0);
+  assert.match(
+    ntk.createNtkSource({ variant: "manga" }).__buildSearchUrl(
+      "?꾩닔",
+      1,
+      filters,
+    ),
+    /[?&]pub=all(?:&|$)/,
+  );
+});
+
 test("builds title search and complete filter URLs against HTML list pages", () => {
   const extension = new ntkModule.DefaultExtension();
   extension.source = { additionalParams: "source=webtoon" };
@@ -492,7 +509,7 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.3.0", "0.3.0", "0.3.2"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.3.1", "0.3.1", "0.3.3"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
   for (const source of index) {
     assert.equal(source.sourceCodeLanguage, 1);
