@@ -660,12 +660,11 @@ function createWebviewImageExtractorScript(readerUrl = "") {
       });
     };
   }
-  try {
-    var currentPath = window.location.pathname;
-    window.__ntk_ad_ack_scope = currentPath;
-    window.dispatchEvent(new CustomEvent("ntk-ad-ack-ready", { detail: { scope: currentPath } }));
-  } catch (e) {}
-  installFetchInterceptor();
+  window.addEventListener("ntk-ad-ack-ready", function(event){
+    var detail = event && event.detail || {};
+    if (detail.scope && detail.scope !== window.location.pathname) return;
+    Promise.resolve().then(installFetchInterceptor);
+  });
   function collect() {
     var nodes = Array.prototype.slice.call(document.querySelectorAll(".theme-viewer-images .theme-viewer-image img, .theme-viewer-images img"));
     var images = nodes.map(imageUrlOf).filter(function(src){

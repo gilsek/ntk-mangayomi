@@ -260,9 +260,10 @@ test("builds WebView extractor script and browser-like headers", () => {
   assert.equal(headers.Cookie, undefined);
 });
 
-test("waits through transient ad verification and captures the image fetch", async () => {
+test("does not bypass ad verification and captures the image fetch", async () => {
   const responses = [];
   const events = [];
+  const listeners = {};
   const imageResponse = {
     url: "https://newtoki1.org/api/manhwa-images",
     clone() {
@@ -279,8 +280,11 @@ test("waits through transient ad verification and captures the image fetch", asy
       },
       dispatchEvent(event) {
         events.push(event);
+        for (const listener of listeners[event.type] || []) listener(event);
       },
-      addEventListener() {},
+      addEventListener(type, listener) {
+        (listeners[type] ||= []).push(listener);
+      },
       setInterval: () => 1,
       clearInterval() {},
       flutter_inappwebview: {
@@ -305,11 +309,15 @@ test("waits through transient ad verification and captures the image fetch", asy
 
   vm.runInNewContext(ntk.createWebviewImageExtractorScript("https://newtoki1.org/manhwa/work/episode"), sandbox);
   assert.deepEqual(responses, []);
+  assert.equal(sandbox.window.fetch, nativeFetch);
+  assert.equal(sandbox.window.__ntk_ad_ack_scope, undefined);
+  assert.deepEqual(events, []);
+
+  sandbox.window.dispatchEvent(new sandbox.CustomEvent("ntk-ad-ack-ready", {
+    detail: { scope: "/manhwa/work/episode", source: "ad-guard" }
+  }));
+  await Promise.resolve();
   assert.notEqual(sandbox.window.fetch, nativeFetch);
-  assert.equal(sandbox.window.__ntk_ad_ack_scope, "/manhwa/work/episode");
-  assert.equal(events.length, 1);
-  assert.equal(events[0].type, "ntk-ad-ack-ready");
-  assert.equal(events[0].detail.scope, "/manhwa/work/episode");
 
   await sandbox.window.fetch("https://newtoki1.org/api/manhwa-images");
   await new Promise((resolve) => setImmediate(resolve));
