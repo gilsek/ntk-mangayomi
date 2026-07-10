@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.2.9",
+    version: "0.3.0",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -25,7 +25,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 0,
-    version: "0.2.9",
+    version: "0.3.0",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -42,7 +42,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     typeSource: "single",
     itemType: 2,
-    version: "0.2.9",
+    version: "0.3.0",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -595,9 +595,17 @@ function createInitialNtkCookie(headers) {
   });
 }
 
-function createWebviewImageExtractorScript() {
+function createWebviewImageExtractorScript(readerUrl = "") {
+  const expectedReaderUrl = JSON.stringify(String(readerUrl || ""));
   return `
 (function(){
+  var expectedReaderUrl = ${expectedReaderUrl};
+  if (expectedReaderUrl && window.location.pathname === "/") {
+    if (window.__ntkBootstrapScheduled) return;
+    window.__ntkBootstrapScheduled = true;
+    window.setTimeout(function(){ window.location.href = expectedReaderUrl; }, 3000);
+    return;
+  }
   if (window.__ntkImageInterceptorInstalled) return;
   window.__ntkImageInterceptorInstalled = true;
   var finished = false;
@@ -644,7 +652,12 @@ function createWebviewImageExtractorScript() {
       });
     };
   }
-  window.addEventListener("ntk-ad-ack-ready", installFetchInterceptor);
+  try {
+    var currentPath = window.location.pathname;
+    window.__ntk_ad_ack_scope = currentPath;
+    window.dispatchEvent(new CustomEvent("ntk-ad-ack-ready", { detail: { scope: currentPath } }));
+  } catch (e) {}
+  installFetchInterceptor();
   function collect() {
     var nodes = Array.prototype.slice.call(document.querySelectorAll(".theme-viewer-images .theme-viewer-image img, .theme-viewer-images img"));
     var images = nodes.map(imageUrlOf).filter(function(src){
@@ -662,7 +675,6 @@ function createWebviewImageExtractorScript() {
   var attempts = 0;
   var timer = window.setInterval(function(){
     attempts += 1;
-    if (window.__ntk_ad_ack_scope) installFetchInterceptor();
     if (collect()) {
       window.clearInterval(timer);
       return;
@@ -1541,7 +1553,7 @@ class DefaultExtension extends ProviderBase {
     }
     if (typeof evaluateJavascriptViaWebview === "function") {
       try {
-        const webviewResult = await evaluateJavascriptViaWebview(readerUrl, headersWithoutCookie(headers), [createWebviewImageExtractorScript()]);
+        const webviewResult = await evaluateJavascriptViaWebview(`${source.baseUrl}/`, headersWithoutCookie(headers), [createWebviewImageExtractorScript(readerUrl)]);
         return parseWebviewImageResponse(webviewResult).map((imageUrl) => ({ url: absoluteUrl(source.baseUrl, imageUrl), headers }));
       } catch (error) {
         lastError = new Error(`WebView fallback failed: ${error.message || error}`);

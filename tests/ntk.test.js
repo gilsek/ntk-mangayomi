@@ -204,7 +204,7 @@ test("detects NTK maintenance pages", () => {
 });
 
 test("builds WebView extractor script and browser-like headers", () => {
-  const script = ntk.createWebviewImageExtractorScript();
+  const script = ntk.createWebviewImageExtractorScript("https://newtoki1.org/manhwa/work/episode");
   assert.match(script, /theme-viewer-images/);
   assert.match(script, /setResponse/);
   assert.match(script, /window\.fetch/);
@@ -221,7 +221,7 @@ test("builds WebView extractor script and browser-like headers", () => {
 
 test("waits through transient ad verification and captures the image fetch", async () => {
   const responses = [];
-  const listeners = {};
+  const events = [];
   const imageResponse = {
     url: "https://newtoki1.org/api/manhwa-images",
     clone() {
@@ -232,9 +232,14 @@ test("waits through transient ad verification and captures the image fetch", asy
   const sandbox = {
     window: {
       fetch: nativeFetch,
-      addEventListener(name, callback) {
-        listeners[name] = callback;
+      location: {
+        pathname: "/manhwa/work/episode",
+        href: "https://newtoki1.org/manhwa/work/episode"
       },
+      dispatchEvent(event) {
+        events.push(event);
+      },
+      addEventListener() {},
       setInterval: () => 1,
       clearInterval() {},
       flutter_inappwebview: {
@@ -251,20 +256,55 @@ test("waits through transient ad verification and captures the image fetch", asy
     JSON,
     String,
     RegExp,
-    Promise
+    Promise,
+    CustomEvent: function(type, init) {
+      return { type, detail: init.detail };
+    }
   };
 
-  vm.runInNewContext(ntk.createWebviewImageExtractorScript(), sandbox);
+  vm.runInNewContext(ntk.createWebviewImageExtractorScript("https://newtoki1.org/manhwa/work/episode"), sandbox);
   assert.deepEqual(responses, []);
-  assert.equal(sandbox.window.fetch, nativeFetch);
-
-  listeners["ntk-ad-ack-ready"]();
   assert.notEqual(sandbox.window.fetch, nativeFetch);
+  assert.equal(sandbox.window.__ntk_ad_ack_scope, "/manhwa/work/episode");
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, "ntk-ad-ack-ready");
+  assert.equal(events[0].detail.scope, "/manhwa/work/episode");
 
   await sandbox.window.fetch("https://newtoki1.org/api/manhwa-images");
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.deepEqual(responses, [{ ok: true, images: ["https://img/reader-1.webp"] }]);
+});
+
+test("bootstraps the NTK root before navigating to a manhwa reader", () => {
+  let navigate;
+  const nativeFetch = async () => ({ url: "", clone() { return { json: async () => ({}) }; } });
+  const sandbox = {
+    window: {
+      fetch: nativeFetch,
+      location: { pathname: "/", href: "https://newtoki1.org/" },
+      setTimeout(callback) { navigate = callback; },
+      setInterval: () => 1,
+      clearInterval() {},
+      dispatchEvent() {},
+      addEventListener() {},
+      flutter_inappwebview: { callHandler() {} }
+    },
+    document: { querySelectorAll: () => [], querySelector: () => null },
+    Array,
+    JSON,
+    String,
+    RegExp,
+    Promise,
+    CustomEvent: function(type, init) { return { type, detail: init.detail }; }
+  };
+
+  vm.runInNewContext(ntk.createWebviewImageExtractorScript("https://newtoki1.org/manhwa/work/episode"), sandbox);
+
+  assert.equal(typeof navigate, "function");
+  assert.equal(sandbox.window.fetch, nativeFetch);
+  navigate();
+  assert.equal(sandbox.window.location.href, "https://newtoki1.org/manhwa/work/episode");
 });
 
 test("detects reader bootstrap token fields", () => {
@@ -422,7 +462,7 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.2.9", "0.2.9", "0.2.9"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.3.0", "0.3.0", "0.3.0"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
   for (const source of index) {
     assert.equal(source.sourceCodeLanguage, 1);
