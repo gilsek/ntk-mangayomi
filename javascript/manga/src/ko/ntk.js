@@ -3,12 +3,12 @@ const mangayomiSources = [
     id: 240710001,
     name: "NTK Webtoon",
     lang: "ko",
-    baseUrl: "https://newtoki1.org",
+    baseUrl: "https://toki30.com",
     apiUrl: "",
-    iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
+    iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://toki30.com",
     typeSource: "single",
     itemType: 0,
-    version: "0.3.4",
+    version: "0.3.5",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -20,12 +20,12 @@ const mangayomiSources = [
     id: 240710002,
     name: "NTK Manhwa",
     lang: "ko",
-    baseUrl: "https://newtoki1.org",
+    baseUrl: "https://toki30.com",
     apiUrl: "",
-    iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
+    iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://toki30.com",
     typeSource: "single",
     itemType: 0,
-    version: "0.3.4",
+    version: "0.3.5",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -37,12 +37,12 @@ const mangayomiSources = [
     id: 240710003,
     name: "NTK Novel",
     lang: "ko",
-    baseUrl: "https://newtoki1.org",
+    baseUrl: "https://toki30.com",
     apiUrl: "",
-    iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
+    iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://toki30.com",
     typeSource: "single",
     itemType: 2,
-    version: "0.3.5",
+    version: "0.3.6",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -1209,7 +1209,7 @@ function hmacSha256Bytes(secret, message) {
 function createNtkSource(options = {}) {
   const variantName = options.variant || "webtoon";
   const variant = VARIANTS[variantName] || VARIANTS.webtoon;
-  const baseUrl = trimSlash(options.baseUrl || "https://newtoki1.org");
+  const baseUrl = trimSlash(options.baseUrl || "https://toki30.com");
 
   return {
     variantName,
@@ -1326,7 +1326,7 @@ class DefaultExtension extends ProviderBase {
   }
 
   getBaseUrl() {
-    const fallback = trimSlash((this.source && this.source.baseUrl) || "https://newtoki1.org");
+    const fallback = trimSlash((this.source && this.source.baseUrl) || "https://toki30.com");
     if (typeof SharedPreferences === "undefined") return fallback;
     const prefs = new SharedPreferences();
     return trimSlash(prefs.get("ntkBaseUrl") || fallback);
@@ -1724,8 +1724,8 @@ class DefaultExtension extends ProviderBase {
         key: "ntkBaseUrl",
         editTextPreference: {
           title: "Override BaseUrl",
-          summary: "Current NTK domain, for example https://newtoki1.org",
-          value: "https://newtoki1.org",
+          summary: "Current NTK domain, for example https://toki30.com",
+          value: "https://toki30.com",
           dialogTitle: "Override BaseUrl",
           dialogMessage: "Change this when the Newtoki domain changes."
         }

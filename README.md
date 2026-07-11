@@ -5,7 +5,7 @@ This workspace contains a JavaScript Mangayomi port of the Tachiyomi `Tachiyomi:
 ## What is included
 
 - `NTK Webtoon`
-- `NTK Manga`
+- `NTK Manhwa`
 - Shared JavaScript implementation in `javascript/manga/src/ko/ntk.js`
 - Mangayomi repository metadata in `index.json` and `repo.json`
 - Local Node tests in `tests/ntk.test.js`
@@ -36,14 +36,14 @@ Add this single repository URL in Mangayomi's extension repository settings:
 https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/index.json
 ```
 
-It exposes all three sources: `NTK Webtoon`, `NTK Manga`, and `NTK Novel`.
+It exposes all three sources: `NTK Webtoon`, `NTK Manhwa`, and `NTK Novel`.
 
 Mangayomi keeps manga and novel repository lists separately. Add the same URL
 in both lists to make all three entries available.
 
 ## Reader support
 
-`NTK Manga` normalizes legacy `/manga/...` entries to the live `/manhwa/...` route and uses the NTK image API's browser-session proof flow. It includes a pure JavaScript P-256 signing fallback for Mangayomi's QuickJS runtime, which does not provide WebCrypto.
+`NTK Manhwa` normalizes legacy `/manga/...` entries to the live `/manhwa/...` route and uses the NTK image API's browser-session proof flow. It includes a pure JavaScript P-256 signing fallback for Mangayomi's QuickJS runtime, which does not provide WebCrypto.
 
 For native manga-image rendering, use a Mangayomi build that returns WebView
 script payloads to JavaScript extensions. The companion source patch is

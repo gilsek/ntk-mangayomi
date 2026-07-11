@@ -13,14 +13,14 @@ function decodeCanonicalQuery(url) {
 test("builds the general webtoon popular HTML URL", () => {
   const source = ntk.createNtkSource({ variant: "webtoon" });
   const url = source.__buildPopularUrl(2);
-  assert.match(url, /^https:\/\/newtoki1\.org\/webtoon\/__q\//);
+  assert.match(url, /^https:\/\/toki30\.com\/webtoon\/__q\//);
   assert.equal(decodeCanonicalQuery(url), "kind=webtoon&page=2&pub=ongoing&sod=desc&sst=as_view");
 });
 
 test("builds manga popular API URL", () => {
   const source = ntk.createNtkSource({ variant: "manga" });
   const url = source.__buildPopularUrl(3);
-  assert.equal(url, "https://newtoki1.org/api/manhwa-list?status=ongoing&sort=views&page=3&pageSize=49&withTotal=1");
+  assert.equal(url, "https://toki30.com/api/manhwa-list?status=ongoing&sort=views&page=3&pageSize=49&withTotal=1");
 });
 
 test("builds source-specific filters from the live NTK search forms", () => {
@@ -122,7 +122,7 @@ test("builds manga and novel filter URLs with source-specific fields", () => {
   const mangaFilters = extension.getFilterList();
   mangaFilters.find((filter) => filter.type === "artist").state = "니시 오사무";
   mangaFilters.find((filter) => filter.type === "genre").state = mangaFilters.find((filter) => filter.type === "genre").values.findIndex((option) => option.value === "이세계");
-  assert.match(ntk.createNtkSource({ variant: "manga" }).__buildSearchUrl("악마", 1, mangaFilters), /^https:\/\/newtoki1\.org\/manhwa\?kind=manhwa&stx=/);
+  assert.match(ntk.createNtkSource({ variant: "manga" }).__buildSearchUrl("악마", 1, mangaFilters), /^https:\/\/toki30\.com\/manhwa\?kind=manhwa&stx=/);
   assert.match(ntk.createNtkSource({ variant: "manga" }).__buildSearchUrl("악마", 1, mangaFilters), /artist=%EB%8B%88%EC%8B%9C%20%EC%98%A4%EC%82%AC%EB%AC%B4/);
   assert.match(ntk.createNtkSource({ variant: "manga" }).__buildSearchUrl("악마", 1, mangaFilters), /tag=%EC%9D%B4%EC%84%B8%EA%B3%84/);
 
@@ -130,7 +130,7 @@ test("builds manga and novel filter URLs with source-specific fields", () => {
   const novelFilters = extension.getFilterList();
   novelFilters.find((filter) => filter.type === "platform").state = novelFilters.find((filter) => filter.type === "platform").values.findIndex((option) => option.value === "munpia");
   const novelUrl = ntk.createNtkSource({ variant: "novel" }).__buildSearchUrl("천마", 3, novelFilters);
-  assert.match(novelUrl, /^https:\/\/newtoki1\.org\/novel\?kind=novel&stx=/);
+  assert.match(novelUrl, /^https:\/\/toki30\.com\/novel\?kind=novel&stx=/);
   assert.match(novelUrl, /plat=munpia/);
   assert.match(novelUrl, /page=3$/);
 });
@@ -149,11 +149,11 @@ test("parses current NTK HTML lists, removes duplicates, and detects next page",
     </ul>
     <ul class="pagination"><li><a href="/manhwa?page=2"><i class="fa fa-angle-right"></i></a></li></ul>`;
 
-  assert.deepEqual(extension.parseMangaCards(html, "https://newtoki1.org"), {
+  assert.deepEqual(extension.parseMangaCards(html, "https://toki30.com"), {
     list: [
       {
         name: "수해의 마녀",
-        imageUrl: "https://newtoki1.org/cover.jpg",
+        imageUrl: "https://toki30.com/cover.jpg",
         url: "/manhwa/36439",
         link: "/manhwa/36439"
       }
@@ -220,7 +220,7 @@ test("parses legacy newtoki detail and chapter rows", () => {
         <div class="wr-date hidden-xs">2023.04.26</div>
       </li>
     </ul>`;
-  assert.deepEqual(ntk.parseDetailsHtml(html, "https://newtoki1.org"), {
+  assert.deepEqual(ntk.parseDetailsHtml(html, "https://toki30.com"), {
     title: "연애혁명",
     author: "232",
     description: "작품 설명 두 번째 줄",
@@ -228,7 +228,7 @@ test("parses legacy newtoki detail and chapter rows", () => {
     status: "ONGOING",
     genre: "학원, 개그/코미디, 로맨스"
   });
-  assert.deepEqual(ntk.parseChaptersHtml(html, "https://newtoki1.org"), [
+  assert.deepEqual(ntk.parseChaptersHtml(html, "https://toki30.com"), [
     {
       name: "0443 - 후기",
       url: "/webtoon/570503/1181035",
@@ -260,7 +260,7 @@ test("detects NTK maintenance pages", () => {
 });
 
 test("builds WebView extractor script and browser-like headers", () => {
-  const script = ntk.createWebviewImageExtractorScript("https://newtoki1.org/manhwa/work/episode");
+  const script = ntk.createWebviewImageExtractorScript("https://toki30.com/manhwa/work/episode");
   assert.match(script, /theme-viewer-images/);
   assert.match(script, /setResponse/);
   assert.match(script, /window\.fetch/);
@@ -268,10 +268,10 @@ test("builds WebView extractor script and browser-like headers", () => {
   assert.match(script, /\/api\/(?:manhwa|webtoon)-images/);
   assert.match(script, /__ntkImageInterceptorInstalled/);
 
-  const headers = ntk.browserFetchHeaders({ "User-Agent": "UA", Cookie: "a=b" }, "https://newtoki1.org/webtoon/570503/1181035");
+  const headers = ntk.browserFetchHeaders({ "User-Agent": "UA", Cookie: "a=b" }, "https://toki30.com/webtoon/570503/1181035");
   assert.equal(headers["User-Agent"], "UA");
-  assert.equal(headers.origin, "https://newtoki1.org");
-  assert.equal(headers.referer, "https://newtoki1.org/webtoon/570503/1181035");
+  assert.equal(headers.origin, "https://toki30.com");
+  assert.equal(headers.referer, "https://toki30.com/webtoon/570503/1181035");
   assert.equal(headers.Cookie, undefined);
 });
 
@@ -280,7 +280,7 @@ test("does not bypass ad verification and captures the image fetch", async () =>
   const events = [];
   const listeners = {};
   const imageResponse = {
-    url: "https://newtoki1.org/api/manhwa-images",
+    url: "https://toki30.com/api/manhwa-images",
     clone() {
       return { json: async () => ({ images: ["https://img/reader-1.webp"] }) };
     }
@@ -291,7 +291,7 @@ test("does not bypass ad verification and captures the image fetch", async () =>
       fetch: nativeFetch,
       location: {
         pathname: "/manhwa/work/episode",
-        href: "https://newtoki1.org/manhwa/work/episode"
+        href: "https://toki30.com/manhwa/work/episode"
       },
       dispatchEvent(event) {
         events.push(event);
@@ -322,7 +322,7 @@ test("does not bypass ad verification and captures the image fetch", async () =>
     }
   };
 
-  vm.runInNewContext(ntk.createWebviewImageExtractorScript("https://newtoki1.org/manhwa/work/episode"), sandbox);
+  vm.runInNewContext(ntk.createWebviewImageExtractorScript("https://toki30.com/manhwa/work/episode"), sandbox);
   assert.deepEqual(responses, []);
   assert.equal(sandbox.window.fetch, nativeFetch);
   assert.equal(sandbox.window.__ntk_ad_ack_scope, undefined);
@@ -334,7 +334,7 @@ test("does not bypass ad verification and captures the image fetch", async () =>
   await Promise.resolve();
   assert.notEqual(sandbox.window.fetch, nativeFetch);
 
-  await sandbox.window.fetch("https://newtoki1.org/api/manhwa-images");
+  await sandbox.window.fetch("https://toki30.com/api/manhwa-images");
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.deepEqual(responses, [{ ok: true, images: ["https://img/reader-1.webp"] }]);
@@ -346,7 +346,7 @@ test("bootstraps the NTK root before navigating to a manhwa reader", () => {
   const sandbox = {
     window: {
       fetch: nativeFetch,
-      location: { pathname: "/", href: "https://newtoki1.org/" },
+      location: { pathname: "/", href: "https://toki30.com/" },
       setTimeout(callback) { navigate = callback; },
       setInterval: () => 1,
       clearInterval() {},
@@ -363,12 +363,12 @@ test("bootstraps the NTK root before navigating to a manhwa reader", () => {
     CustomEvent: function(type, init) { return { type, detail: init.detail }; }
   };
 
-  vm.runInNewContext(ntk.createWebviewImageExtractorScript("https://newtoki1.org/manhwa/work/episode"), sandbox);
+  vm.runInNewContext(ntk.createWebviewImageExtractorScript("https://toki30.com/manhwa/work/episode"), sandbox);
 
   assert.equal(typeof navigate, "function");
   assert.equal(sandbox.window.fetch, nativeFetch);
   navigate();
-  assert.equal(sandbox.window.location.href, "https://newtoki1.org/manhwa/work/episode");
+  assert.equal(sandbox.window.location.href, "https://toki30.com/manhwa/work/episode");
 });
 
 test("detects reader bootstrap token fields", () => {
@@ -420,7 +420,7 @@ test("generates manga image signature headers without WebCrypto", async () => {
   vm.runInNewContext(`${source}\nmodule.exports = { createBrowserSignedHeaders };`, sandbox);
   const headers = await sandbox.module.exports.createBrowserSignedHeaders({
     async post() { return { body: JSON.stringify({ ok: true, keyId: "test-key", serverNow: Date.now() }) }; }
-  }, "https://newtoki1.org", "POST", "/api/manhwa-images", "/manhwa/a/b", "{}", {});
+  }, "https://toki30.com", "POST", "/api/manhwa-images", "/manhwa/a/b", "{}", {});
   assert.equal(headers["x-ntk-key-id"], "test-key");
   assert.match(headers["x-ntk-sig"], /^[A-Za-z0-9_-]+$/);
 });
@@ -498,7 +498,7 @@ test("parses live-shaped novel API response into novel routes", () => {
     total: 2,
     pageSize: 1
   });
-  const result = ntk.parseWorksResponse(body, "https://newtoki1.org", "novel");
+  const result = ntk.parseWorksResponse(body, "https://toki30.com", "novel");
   assert.equal(result.list[0].link, "/novel/62101");
 });
 
@@ -534,13 +534,13 @@ test("preserves line breaks inside novel HTML payloads", () => {
 
 test("normalizes cached manga routes from old extension versions", () => {
   assert.equal(ntk.normalizeSourceUrl("/manga/u-moo1unxn-b4jo", "manga"), "/manhwa/u-moo1unxn-b4jo");
-  assert.equal(ntk.normalizeSourceUrl("https://newtoki1.org/manga/2", "manga"), "https://newtoki1.org/manhwa/2");
+  assert.equal(ntk.normalizeSourceUrl("https://toki30.com/manga/2", "manga"), "https://toki30.com/manhwa/2");
   assert.equal(ntk.normalizeSourceUrl("/webtoon/570503", "webtoon"), "/webtoon/570503");
 });
 
 test("returns canonical manga links when refreshing cached details", async () => {
   const extension = new ntkModule.DefaultExtension();
-  extension.source = { name: "NTK Manhwa", baseUrl: "https://newtoki1.org", additionalParams: "source=manga" };
+  extension.source = { name: "NTK Manhwa", baseUrl: "https://toki30.com", additionalParams: "source=manga" };
   extension.client = { get: async () => ({ body: "<h1 class=\"hero-v2-title\">Test</h1>" }) };
 
   const detail = await extension.getDetail("/manga/u-moo1unxn-b4jo");
@@ -556,9 +556,10 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.3.4", "0.3.4", "0.3.5"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.3.5", "0.3.5", "0.3.6"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
   for (const source of index) {
+    assert.equal(source.baseUrl, "https://toki30.com");
     assert.equal(source.sourceCodeLanguage, 1);
     assert.equal(source.isNsfw, false);
     assert.match(source.sourceCodeUrl, /javascript\/manga\/src\/ko\/ntk\.js$/);
