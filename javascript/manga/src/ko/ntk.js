@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://toki30.com",
     typeSource: "single",
     itemType: 0,
-    version: "0.3.8",
+    version: "0.3.9",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -58,7 +58,7 @@ const VARIANTS = {
   webtoon: {
     name: "NTK Webtoon",
     kind: "webtoon",
-    listPage: "/webtoon",
+    listPage: "/ing",
     authorField: "author",
     listEndpoint: "/api/works",
     latestEndpoint: "/api/works",
@@ -1219,21 +1219,21 @@ function createNtkSource(options = {}) {
     },
     __buildHtmlListUrl(page, filters, defaults = {}) {
       const category = filterValue(filters, "category", "\uC77C\uBC18\uC6F9\uD230");
-      const toon = category;
-      const pub = category === "\uC644\uACB0\uC6F9\uD230"
-        ? "completed"
-        : (defaults.pub || defaults.status || "ongoing");
-      return canonicalQueryUrl(joinUrl(baseUrl, variant.listPage), {
-        toon,
-        stx: String(defaults.query || "").trim(),
-        [variant.authorField]: filterTextValue(filters, variant.authorField),
-        yoil: filterValue(filters, "weekday", ""),
-        plat: filterValue(filters, "platform", ""),
-        pub,
-        tag: filterValue(filters, "genre", ""),
-        sst: filterValue(filters, "sort", defaults.sort || "as_update"),
-        sod: "desc",
-        page
+      const query = String(defaults.query || "").trim();
+      if (query) {
+        return canonicalQueryUrl(joinUrl(baseUrl, "/search"), {
+          field: "title",
+          match: "contains",
+          page: page > 1 ? page : "",
+          q: query
+        });
+      }
+
+      const listPath = category === "\uC644\uACB0\uC6F9\uD230" ? "/end" : variant.listPage;
+      return canonicalQueryUrl(joinUrl(baseUrl, listPath), {
+        day: filterValue(filters, "weekday", ""),
+        page: page > 1 ? page : "",
+        sort: defaults.sort === "as_update" ? "new" : ""
       });
     },
     __buildListUrl(page, filters, defaults = {}) {
@@ -1415,7 +1415,21 @@ class DefaultExtension extends ProviderBase {
         list.push({ name, imageUrl, url: href, link: href });
       }
     }
-    const hasNextPage = /<a[^>]*href=["'][^"']*[?&](?:amp;)?page=\d+[^"']*["'][^>]*>[\s\S]*?<i[^>]*class=["'][^"']*\bfa-angle-right\b[^"']*["']/i.test(html);
+
+    const webtoonCardPattern = /(<a[^>]*href=["']\/webtoon\/[^"']+["'][^>]*>)([\s\S]*?)<\/a>/gi;
+    while ((match = webtoonCardPattern.exec(html)) !== null) {
+      const cardTag = match[1];
+      const card = match[2];
+      const href = attrValue(cardTag, "href");
+      const imgTag = firstMatch(card, /(<img[^>]*>)/i);
+      const name = attrValue(imgTag, "alt") || stripTags(firstMatch(card, /<strong[^>]*>([\s\S]*?)<\/strong>/i));
+      const imageUrl = absoluteUrl(baseUrl, attrValue(imgTag, "src") || attrValue(imgTag, "data-src"));
+      if (name && href && !seen.has(href)) {
+        seen.add(href);
+        list.push({ name, imageUrl, url: href, link: href });
+      }
+    }
+    const hasNextPage = /<a[^>]*href=["'][^"']*[?&](?:amp;)?page=\d+[^"']*["']/i.test(html);
     return { list, hasNextPage };
   }
 

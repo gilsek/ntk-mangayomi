@@ -12,7 +12,7 @@
     "hasCloudflare": false,
     "sourceCodeUrl": "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk.js",
     "apiUrl": "",
-    "version": "0.3.8",
+    "version": "0.3.9",
     "isManga": true,
     "itemType": 0,
     "isFullData": false,
