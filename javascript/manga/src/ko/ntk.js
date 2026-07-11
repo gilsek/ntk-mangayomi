@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://toki30.com",
     typeSource: "single",
     itemType: 0,
-    version: "0.3.7",
+    version: "0.3.8",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -1219,12 +1219,11 @@ function createNtkSource(options = {}) {
     },
     __buildHtmlListUrl(page, filters, defaults = {}) {
       const category = filterValue(filters, "category", "\uC77C\uBC18\uC6F9\uD230");
-      const toon = category === "\uC77C\uBC18\uC6F9\uD230" ? "" : category;
+      const toon = category;
       const pub = category === "\uC644\uACB0\uC6F9\uD230"
         ? "completed"
         : (defaults.pub || defaults.status || "ongoing");
       return canonicalQueryUrl(joinUrl(baseUrl, variant.listPage), {
-        kind: variant.kind,
         toon,
         stx: String(defaults.query || "").trim(),
         [variant.authorField]: filterTextValue(filters, variant.authorField),

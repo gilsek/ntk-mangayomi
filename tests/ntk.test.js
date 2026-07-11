@@ -13,7 +13,7 @@ function decodeCanonicalQuery(url) {
 test("builds the general webtoon popular HTML URL", () => {
   const source = ntk.createNtkSource({ variant: "webtoon" });
   const url = source.__buildPopularUrl(2);
-  assert.equal(url, "https://toki30.com/webtoon?kind=webtoon&page=2&pub=ongoing&sod=desc&sst=as_view");
+  assert.equal(url, "https://toki30.com/webtoon?page=2&pub=ongoing&sod=desc&sst=as_view&toon=%EC%9D%BC%EB%B0%98%EC%9B%B9%ED%88%B0");
 });
 
 test("builds manga popular API URL", () => {
@@ -99,20 +99,20 @@ test("uses the webtoon top-level category for list requests", () => {
   const source = ntk.createNtkSource({ variant: "webtoon" });
 
   let url = source.__buildPopularUrl(2, filters);
-  assert.equal(decodeCanonicalQuery(url), "kind=webtoon&page=2&pub=ongoing&sod=desc&sst=as_update");
+  assert.equal(decodeCanonicalQuery(url), "page=2&pub=ongoing&sod=desc&sst=as_update&toon=%EC%9D%BC%EB%B0%98%EC%9B%B9%ED%88%B0");
 
   filters.find((filter) => filter.type === "genre").state = 1;
   url = source.__buildPopularUrl(2, filters);
-  assert.equal(decodeCanonicalQuery(url), "kind=webtoon&page=2&pub=ongoing&sod=desc&sst=as_update&tag=%ED%8C%90%ED%83%80%EC%A7%80");
+  assert.equal(decodeCanonicalQuery(url), "page=2&pub=ongoing&sod=desc&sst=as_update&tag=%ED%8C%90%ED%83%80%EC%A7%80&toon=%EC%9D%BC%EB%B0%98%EC%9B%B9%ED%88%B0");
   filters.find((filter) => filter.type === "genre").state = 0;
 
   filters.find((filter) => filter.type === "category").state = 1;
   url = source.__buildPopularUrl(2, filters);
-  assert.equal(decodeCanonicalQuery(url), "kind=webtoon&page=2&pub=ongoing&sod=desc&sst=as_update&toon=%EC%84%B1%EC%9D%B8%EC%9B%B9%ED%88%B0");
+  assert.equal(decodeCanonicalQuery(url), "page=2&pub=ongoing&sod=desc&sst=as_update&toon=%EC%84%B1%EC%9D%B8%EC%9B%B9%ED%88%B0");
 
   filters.find((filter) => filter.type === "category").state = 3;
   url = source.__buildPopularUrl(2, filters);
-  assert.equal(decodeCanonicalQuery(url), "kind=webtoon&page=2&pub=completed&sod=desc&sst=as_update&toon=%EC%99%84%EA%B2%B0%EC%9B%B9%ED%88%B0");
+  assert.equal(decodeCanonicalQuery(url), "page=2&pub=completed&sod=desc&sst=as_update&toon=%EC%99%84%EA%B2%B0%EC%9B%B9%ED%88%B0");
 });
 
 test("builds title search and complete filter URLs against HTML list pages", () => {
@@ -129,7 +129,7 @@ test("builds title search and complete filter URLs against HTML list pages", () 
   const source = ntk.createNtkSource({ variant: "webtoon" });
   assert.equal(
     decodeCanonicalQuery(source.__buildSearchUrl("연애혁명", 2, filters)),
-    "author=232&kind=webtoon&page=2&plat=1&pub=all&sod=desc&sst=as_view&stx=%EC%97%B0%EC%95%A0%ED%98%81%EB%AA%85&tag=%ED%8C%90%ED%83%80%EC%A7%80&toon=%EC%84%B1%EC%9D%B8%EC%9B%B9%ED%88%B0&yoil=%EA%B8%88"
+    "author=232&page=2&plat=1&pub=all&sod=desc&sst=as_view&stx=%EC%97%B0%EC%95%A0%ED%98%81%EB%AA%85&tag=%ED%8C%90%ED%83%80%EC%A7%80&toon=%EC%84%B1%EC%9D%B8%EC%9B%B9%ED%88%B0&yoil=%EA%B8%88"
   );
 });
 
@@ -574,7 +574,7 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.3.7", "0.3.6", "0.3.7"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.3.8", "0.3.6", "0.3.7"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
   for (const source of index) {
     assert.equal(source.baseUrl, "https://toki30.com");
