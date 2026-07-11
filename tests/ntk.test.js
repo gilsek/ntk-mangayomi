@@ -318,6 +318,21 @@ test("builds WebView extractor script and browser-like headers", () => {
   assert.equal(headers.Cookie, undefined);
 });
 
+test("lets the reader WebView send image API requests directly", () => {
+  assert.deepEqual(
+    ntk.directWebviewHeaders({
+      Cookie: "cf_clearance=secret",
+      "X-WebView-Intercept": "true",
+      "User-Agent": "WebView UA",
+      Accept: "text/html"
+    }),
+    {
+      "User-Agent": "WebView UA",
+      Accept: "text/html"
+    }
+  );
+});
+
 test("does not bypass ad verification and captures the image fetch", async () => {
   const responses = [];
   const events = [];
@@ -599,7 +614,7 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.3.9", "0.3.6", "0.3.7"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.3.10", "0.3.6", "0.3.7"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
   for (const source of index) {
     assert.equal(source.baseUrl, "https://toki30.com");

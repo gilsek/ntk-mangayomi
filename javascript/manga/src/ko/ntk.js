@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://toki30.com",
     typeSource: "single",
     itemType: 0,
-    version: "0.3.9",
+    version: "0.3.10",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -487,6 +487,13 @@ function headersWithoutCookie(headers) {
   const clean = { ...headers };
   delete clean.Cookie;
   delete clean.cookie;
+  return clean;
+}
+
+function directWebviewHeaders(headers) {
+  const clean = headersWithoutCookie(headers);
+  delete clean["X-WebView-Intercept"];
+  delete clean["x-webview-intercept"];
   return clean;
 }
 
@@ -1628,7 +1635,7 @@ class DefaultExtension extends ProviderBase {
     }
     if (typeof evaluateJavascriptViaWebview === "function") {
       try {
-        const webviewResult = await evaluateJavascriptViaWebview(`${source.baseUrl}/`, headersWithoutCookie(headers), [createWebviewImageExtractorScript(readerUrl)]);
+        const webviewResult = await evaluateJavascriptViaWebview(`${source.baseUrl}/`, directWebviewHeaders(headers), [createWebviewImageExtractorScript(readerUrl)]);
         return parseWebviewImageResponse(webviewResult).map((imageUrl) => ({ url: absoluteUrl(source.baseUrl, imageUrl), headers }));
       } catch (error) {
         lastError = new Error(`WebView fallback failed: ${error.message || error}`);
@@ -1785,6 +1792,7 @@ if (typeof module !== "undefined") {
       parseWebviewImageResponse,
       createWebviewImageExtractorScript,
       browserFetchHeaders,
+      directWebviewHeaders,
       parseReaderBootstrap,
       hmacSha256Base64Url,
       buildApiUrl: appendQuery
