@@ -74,6 +74,25 @@ test("defaults title search to all statuses", () => {
   );
 });
 
+test("migrates the previous default BaseUrl preference", () => {
+  const previousSharedPreferences = global.SharedPreferences;
+  let saved;
+  global.SharedPreferences = class {
+    get() { return "https://newtoki1.org"; }
+    setString(key, value) { saved = [key, value]; }
+  };
+
+  try {
+    const extension = new ntkModule.DefaultExtension();
+    extension.source = { baseUrl: "https://toki30.com" };
+    assert.equal(extension.getBaseUrl(), "https://toki30.com");
+    assert.deepEqual(saved, ["ntkBaseUrl", "https://toki30.com"]);
+  } finally {
+    if (previousSharedPreferences === undefined) delete global.SharedPreferences;
+    else global.SharedPreferences = previousSharedPreferences;
+  }
+});
+
 test("uses the webtoon top-level category for list requests", () => {
   const extension = new ntkModule.DefaultExtension();
   extension.source = { additionalParams: "source=webtoon" };
@@ -556,7 +575,7 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.3.5", "0.3.5", "0.3.6"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.3.6", "0.3.6", "0.3.7"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
   for (const source of index) {
     assert.equal(source.baseUrl, "https://toki30.com");

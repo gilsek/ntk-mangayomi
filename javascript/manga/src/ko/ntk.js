@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://toki30.com",
     typeSource: "single",
     itemType: 0,
-    version: "0.3.5",
+    version: "0.3.6",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -25,7 +25,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://toki30.com",
     typeSource: "single",
     itemType: 0,
-    version: "0.3.5",
+    version: "0.3.6",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -42,7 +42,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://toki30.com",
     typeSource: "single",
     itemType: 2,
-    version: "0.3.6",
+    version: "0.3.7",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -1329,7 +1329,14 @@ class DefaultExtension extends ProviderBase {
     const fallback = trimSlash((this.source && this.source.baseUrl) || "https://toki30.com");
     if (typeof SharedPreferences === "undefined") return fallback;
     const prefs = new SharedPreferences();
-    return trimSlash(prefs.get("ntkBaseUrl") || fallback);
+    const configured = trimSlash(prefs.get("ntkBaseUrl") || "");
+    if (!configured || configured === "https://newtoki1.org") {
+      if (configured && typeof prefs.setString === "function") {
+        prefs.setString("ntkBaseUrl", fallback);
+      }
+      return fallback;
+    }
+    return configured;
   }
 
   getSource() {
