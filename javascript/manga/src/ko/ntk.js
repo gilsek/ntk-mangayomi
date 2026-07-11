@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://toki30.com",
     typeSource: "single",
     itemType: 0,
-    version: "0.3.6",
+    version: "0.3.7",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -114,8 +114,7 @@ function canonicalQueryUrl(url, params) {
     .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
   if (pairs.length === 0) return url;
-  const encoded = base64UrlFromBytes(createTextEncoder().encode(pairs.join("&")));
-  return `${trimSlash(url)}/__q/${encoded}`;
+  return `${url}${url.includes("?") ? "&" : "?"}${pairs.join("&")}`;
 }
 
 function parseAdditionalParams(params) {

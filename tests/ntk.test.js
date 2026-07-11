@@ -7,14 +7,13 @@ const ntkModule = require("../javascript/manga/src/ko/ntk.js");
 const ntk = ntkModule.__ntkTest;
 
 function decodeCanonicalQuery(url) {
-  return Buffer.from(url.split("/__q/")[1], "base64url").toString("utf8");
+  return new URL(url).searchParams.toString();
 }
 
 test("builds the general webtoon popular HTML URL", () => {
   const source = ntk.createNtkSource({ variant: "webtoon" });
   const url = source.__buildPopularUrl(2);
-  assert.match(url, /^https:\/\/toki30\.com\/webtoon\/__q\//);
-  assert.equal(decodeCanonicalQuery(url), "kind=webtoon&page=2&pub=ongoing&sod=desc&sst=as_view");
+  assert.equal(url, "https://toki30.com/webtoon?kind=webtoon&page=2&pub=ongoing&sod=desc&sst=as_view");
 });
 
 test("builds manga popular API URL", () => {
