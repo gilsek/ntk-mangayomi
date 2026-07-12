@@ -287,14 +287,29 @@ class TestDocument {
         .map((match) => new TestElement(match[0], match[0]));
     }
 
-    if (selector === 'button[aria-label^="다음"]:not([disabled])') {
-      return Array.from(this.html.matchAll(/<button\b[^>]*>/gi))
+    if (
+      selector ===
+      'nav.pager button[aria-label^="다음"]:not([disabled])'
+    ) {
+      const pager = elementInnerHtmlByClass(this.html, "nav", "pager");
+      return Array.from(pager.matchAll(/<button\b[^>]*>/gi))
         .filter(
           (match) =>
             readAttribute(match[0], "aria-label").startsWith("다음") &&
             !/\sdisabled(?:\s|=|>)/i.test(match[0]),
         )
         .map((match) => new TestElement(match[0], match[0]));
+    }
+
+    if (selector === 'main.container > div[style*="text-align:center"]') {
+      const container = elementInnerHtmlByClass(this.html, "main", "container");
+      return Array.from(
+        container.matchAll(/(<div\b[^>]*>)([\s\S]*?)<\/div>/gi),
+      )
+        .filter((match) =>
+          readAttribute(match[1], "style").includes("text-align:center"),
+        )
+        .map((match) => new TestElement(match[0], match[1]));
     }
 
     if (selector === ".rank-v2-page") {

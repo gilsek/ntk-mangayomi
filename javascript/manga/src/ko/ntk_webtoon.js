@@ -272,7 +272,9 @@ class DefaultExtension extends MProvider {
 
   hasNextLatestPage(document) {
     return (
-      document.select('button[aria-label^="다음"]:not([disabled])').length > 0
+      document.select(
+        'nav.pager button[aria-label^="다음"]:not([disabled])',
+      ).length > 0
     );
   }
 
@@ -297,9 +299,18 @@ class DefaultExtension extends MProvider {
     if (document.select(".ep-empty").length > 0) {
       return { list: [], hasNextPage: false };
     }
+    const centeredEmpty = document.select(
+      'main.container > div[style*="text-align:center"]',
+    );
+    if (
+      centeredEmpty.length > 0 &&
+      (centeredEmpty[0].text || "").trim() === "결과가 없습니다"
+    ) {
+      return { list: [], hasNextPage: false };
+    }
     if (document.select("div.card-grid").length === 0) {
       throw new Error(
-        `Next Webtoon latest structure error parserFamily=next url=${requestUrl} missing=div.card-grid,.ep-empty`,
+        `Next Webtoon latest structure error parserFamily=next url=${requestUrl} missing=div.card-grid,.ep-empty,centered empty marker`,
       );
     }
     const cards = document.select(

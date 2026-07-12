@@ -55,6 +55,16 @@ test("accepts an explicit empty Next latest page", async () => {
   assert.deepEqual(result, { list: [], hasNextPage: false });
 });
 
+test("accepts the observed centered empty Next latest page", async () => {
+  const result = plain(
+    await loadWebtoonSource({
+      body: fixture("next-latest-empty-page.html"),
+    }).extension.getLatestUpdates(183),
+  );
+
+  assert.deepEqual(result, { list: [], hasNextPage: false });
+});
+
 test("rejects a Next latest page without a card grid or empty marker", async () => {
   const { extension } = loadWebtoonSource({ body: "<main></main>" });
 
