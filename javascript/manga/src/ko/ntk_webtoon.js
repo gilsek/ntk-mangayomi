@@ -35,7 +35,7 @@ const NEXT_DOMAIN_NUMBER_PREFERENCE = "ntk_webtoon_next_domain_number";
 
 class DefaultExtension extends MProvider {
   get supportsLatest() {
-    return this.getParserFamily() === "legacy";
+    return true;
   }
 
   getHeaders() {
@@ -144,6 +144,10 @@ class DefaultExtension extends MProvider {
     return `${this.getNextBaseUrl()}/rank?period=week&kind=webtoon`;
   }
 
+  buildNextLatestUrl(page) {
+    return `${this.getNextBaseUrl()}/ing?page=${encodeURIComponent(String(page))}`;
+  }
+
   parseNextRankCard(element, titleSelector, requestUrl) {
     const name = (element.selectFirst(titleSelector).text || "").trim();
     if (!name) {
@@ -237,6 +241,79 @@ class DefaultExtension extends MProvider {
     const requestUrl = this.buildNextPopularUrl();
     const response = await new Client().get(requestUrl, this.getHeaders());
     return this.parseNextPopularResponse(response, requestUrl);
+  }
+
+  parseNextLatestCard(element, requestUrl) {
+    const name = (element.selectFirst("p.subject").text || "").trim();
+    if (!name) {
+      throw new Error(
+        `Next Webtoon latest structure error parserFamily=next url=${requestUrl} missing=p.subject`,
+      );
+    }
+
+    const link = element.getHref || element.attr("href") || "";
+    const cover = element.selectFirst(".thumb img:not(.platform-icon)");
+    const image = cover.getSrc || cover.attr("src") || "";
+
+    return {
+      name,
+      link,
+      imageUrl: this.toAbsoluteUrl(image),
+    };
+  }
+
+  hasNextLatestPage(document) {
+    return (
+      document.select('button[aria-label^="다음"]:not([disabled])').length > 0
+    );
+  }
+
+  parseNextLatestResponse(response, requestUrl) {
+    if (response.statusCode < 200 || response.statusCode >= 400) {
+      throw new Error(
+        `Next Webtoon HTTP ${response.statusCode} parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    const contentType =
+      response.headers?.["content-type"] ||
+      response.headers?.["Content-Type"] ||
+      "";
+    if (contentType && !contentType.toLowerCase().includes("text/html")) {
+      throw new Error(
+        `Next Webtoon non-HTML response parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    const document = new Document(response.body);
+    if (document.select(".ep-empty").length > 0) {
+      return { list: [], hasNextPage: false };
+    }
+    if (document.select("div.card-grid").length === 0) {
+      throw new Error(
+        `Next Webtoon latest structure error parserFamily=next url=${requestUrl} missing=div.card-grid,.ep-empty`,
+      );
+    }
+    const cards = document.select(
+      'div.card-grid > a.card[href^="/webtoon/"]',
+    );
+    if (cards.length === 0) {
+      throw new Error(
+        `Next Webtoon latest structure error parserFamily=next url=${requestUrl} missing=latest cards`,
+      );
+    }
+    return {
+      list: cards.map((element) =>
+        this.parseNextLatestCard(element, requestUrl),
+      ),
+      hasNextPage: this.hasNextLatestPage(document),
+    };
+  }
+
+  async fetchNextLatest(page) {
+    const requestUrl = this.buildNextLatestUrl(page);
+    const response = await new Client().get(requestUrl, this.getHeaders());
+    return this.parseNextLatestResponse(response, requestUrl);
   }
 
   parseLegacyListItem(element, requestUrl) {
@@ -340,9 +417,7 @@ class DefaultExtension extends MProvider {
   }
 
   async getLatestUpdates(page) {
-    if (this.getParserFamily() === "next") {
-      throw new Error("Next Webtoon latest is not implemented");
-    }
+    if (this.getParserFamily() === "next") return this.fetchNextLatest(page);
     return this.fetchLegacyList({ mode: "latest", page });
   }
 

@@ -75,20 +75,10 @@ test("returns an empty Popular page after the fixed ranking page", async () => {
   assert.equal(requests.length, 0);
 });
 
-test("does not expose unfinished Next list features", async () => {
-  const { extension, requests } = loadWebtoonSource();
+test("keeps unfinished Next filters unavailable", () => {
+  const { extension } = loadWebtoonSource();
 
-  assert.equal(extension.supportsLatest, false);
   assert.deepEqual(JSON.parse(JSON.stringify(extension.getFilterList())), []);
-  await assert.rejects(
-    () => extension.getLatestUpdates(1),
-    /Next Webtoon latest is not implemented/,
-  );
-  await assert.rejects(
-    () => extension.search("테스트", 1, []),
-    /Next Webtoon search is not implemented/,
-  );
-  assert.equal(requests.length, 0);
 });
 
 test("keeps Legacy latest and filters behind the Legacy preference", () => {

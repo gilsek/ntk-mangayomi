@@ -43,10 +43,92 @@ function stripTags(html) {
     .trim();
 }
 
+function elementInnerHtmlByClass(html, tagName, className) {
+  const tags = Array.from(
+    html.matchAll(new RegExp(`<\\/?${tagName}\\b[^>]*>`, "gi")),
+  );
+  const startIndex = tags.findIndex(
+    (match) => !match[0].startsWith("</") && hasClass(match[0], className),
+  );
+  if (startIndex < 0) return "";
+
+  let depth = 0;
+  for (let index = startIndex; index < tags.length; index += 1) {
+    if (tags[index][0].startsWith("</")) {
+      depth -= 1;
+      if (depth === 0) {
+        return html.slice(tags[startIndex].index + tags[startIndex][0].length, tags[index].index);
+      }
+    } else {
+      depth += 1;
+    }
+  }
+  return "";
+}
+
+function directChildAnchors(html) {
+  const voidTags = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
+  const tags = Array.from(html.matchAll(/<\/?([a-z][\w-]*)\b[^>]*>/gi));
+  const results = [];
+  let depth = 0;
+  let anchor = null;
+
+  for (const match of tags) {
+    const tagName = match[1].toLowerCase();
+    const closing = match[0].startsWith("</");
+    if (closing) {
+      depth -= 1;
+      if (tagName === "a" && depth === 0 && anchor) {
+        results.push(
+          new TestElement(
+            html.slice(anchor.index, match.index + match[0].length),
+            anchor.openTag,
+          ),
+        );
+        anchor = null;
+      }
+    } else if (!voidTags.has(tagName)) {
+      if (tagName === "a" && depth === 0) {
+        anchor = { index: match.index, openTag: match[0] };
+      }
+      depth += 1;
+    }
+  }
+
+  return results;
+}
+
 function matchingElements(html, selector) {
   const results = [];
 
-  if (
+  if (selector === 'div.card-grid > a.card[href^="/webtoon/"]') {
+    const container = elementInnerHtmlByClass(html, "div", "card-grid");
+    if (!container) return results;
+    for (const element of directChildAnchors(container)) {
+      if (
+        hasClass(element.openTag, "card") &&
+        element.attr("href").startsWith("/webtoon/")
+      ) {
+        results.push(element);
+      }
+    }
+  } else if (selector === "p.subject") {
+    for (const match of html.matchAll(/(<p\b[^>]*>)([\s\S]*?)<\/p>/gi)) {
+      if (hasClass(match[1], "subject")) {
+        results.push(new TestElement(match[0], match[1]));
+      }
+    }
+  } else if (selector === ".thumb img:not(.platform-icon)") {
+    const thumb = html.match(
+      /<div\b[^>]*class=["'][^"']*thumb[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    );
+    if (!thumb) return results;
+    for (const match of thumb[1].matchAll(/<img\b[^>]*>/gi)) {
+      if (!hasClass(match[0], "platform-icon")) {
+        results.push(new TestElement(match[0], match[0]));
+      }
+    }
+  } else if (
     selector === "a.rank-v2-champion" ||
     selector === "a.rank-v2-runner" ||
     selector === "a.rank-v2-row"
@@ -169,6 +251,28 @@ class TestDocument {
   }
 
   select(selector) {
+    if (selector === "div.card-grid") {
+      return Array.from(this.html.matchAll(/<div\b[^>]*>/gi))
+        .filter((match) => hasClass(match[0], "card-grid"))
+        .map((match) => new TestElement(match[0], match[0]));
+    }
+
+    if (selector === ".ep-empty") {
+      return Array.from(this.html.matchAll(/<[^>]+>/gi))
+        .filter((match) => hasClass(match[0], "ep-empty"))
+        .map((match) => new TestElement(match[0], match[0]));
+    }
+
+    if (selector === 'button[aria-label^="다음"]:not([disabled])') {
+      return Array.from(this.html.matchAll(/<button\b[^>]*>/gi))
+        .filter(
+          (match) =>
+            readAttribute(match[0], "aria-label").startsWith("다음") &&
+            !/\sdisabled(?:\s|=|>)/i.test(match[0]),
+        )
+        .map((match) => new TestElement(match[0], match[0]));
+    }
+
     if (selector === ".rank-v2-page") {
       return Array.from(this.html.matchAll(/<[^>]+>/gi))
         .filter((match) => hasClass(match[0], "rank-v2-page"))
