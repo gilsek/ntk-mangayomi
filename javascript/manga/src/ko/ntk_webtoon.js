@@ -35,7 +35,7 @@ const NEXT_DOMAIN_NUMBER_PREFERENCE = "ntk_webtoon_next_domain_number";
 
 class DefaultExtension extends MProvider {
   get supportsLatest() {
-    return true;
+    return this.getParserFamily() === "legacy";
   }
 
   getHeaders() {
@@ -340,10 +340,16 @@ class DefaultExtension extends MProvider {
   }
 
   async getLatestUpdates(page) {
+    if (this.getParserFamily() === "next") {
+      throw new Error("Next Webtoon latest is not implemented");
+    }
     return this.fetchLegacyList({ mode: "latest", page });
   }
 
   async search(query, page, filters) {
+    if (this.getParserFamily() === "next") {
+      throw new Error("Next Webtoon search is not implemented");
+    }
     const normalizedQuery = query.trim();
     if (normalizedQuery.length === 1) {
       return { list: [], hasNextPage: false };
@@ -358,6 +364,8 @@ class DefaultExtension extends MProvider {
   }
 
   getFilterList() {
+    if (this.getParserFamily() === "next") return [];
+
     const select = (type, name, values) => ({
       type_name: "SelectFilter",
       type,
@@ -459,11 +467,21 @@ class DefaultExtension extends MProvider {
   getSourcePreferences() {
     return [
       {
+        key: NEXT_DOMAIN_NUMBER_PREFERENCE,
+        editTextPreference: {
+          title: "Next domain number",
+          summary: "sbxh 뒤에 붙는 숫자만 입력합니다.",
+          value: NEXT_DEFAULT_DOMAIN_NUMBER,
+          dialogTitle: "Next domain number",
+          dialogMessage: "예: 9 → https://sbxh9.com",
+        },
+      },
+      {
         key: BASE_URL_PREFERENCE,
         editTextPreference: {
-          title: "Base URL",
+          title: "Legacy Base URL",
           summary: "수동으로 사용할 NTK 계열 주소",
-          value: this.source.baseUrl,
+          value: LEGACY_DEFAULT_BASE_URL,
           dialogTitle: "Webtoon Base URL",
           dialogMessage: "끝의 /는 자동으로 제거됩니다.",
         },
@@ -474,8 +492,8 @@ class DefaultExtension extends MProvider {
           title: "Parser family",
           summary: "주소에 맞는 파서 계열을 수동으로 선택합니다.",
           valueIndex: 0,
-          entries: ["Legacy", "Next"],
-          entryValues: ["legacy", "next"],
+          entries: ["Next", "Legacy"],
+          entryValues: ["next", "legacy"],
         },
       },
     ];

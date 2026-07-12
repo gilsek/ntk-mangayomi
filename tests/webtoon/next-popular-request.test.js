@@ -74,3 +74,49 @@ test("returns an empty Popular page after the fixed ranking page", async () => {
   });
   assert.equal(requests.length, 0);
 });
+
+test("does not expose unfinished Next list features", async () => {
+  const { extension, requests } = loadWebtoonSource();
+
+  assert.equal(extension.supportsLatest, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(extension.getFilterList())), []);
+  await assert.rejects(
+    () => extension.getLatestUpdates(1),
+    /Next Webtoon latest is not implemented/,
+  );
+  await assert.rejects(
+    () => extension.search("테스트", 1, []),
+    /Next Webtoon search is not implemented/,
+  );
+  assert.equal(requests.length, 0);
+});
+
+test("keeps Legacy latest and filters behind the Legacy preference", () => {
+  const { extension } = loadWebtoonSource({
+    preferences: { ntk_webtoon_parser_family: "legacy" },
+  });
+
+  assert.equal(extension.supportsLatest, true);
+  assert.ok(extension.getFilterList().length > 0);
+});
+
+test("exposes separate Next number and Legacy URL preferences", () => {
+  const { extension } = loadWebtoonSource();
+
+  const preferences = extension.getSourcePreferences();
+  const nextDomain = preferences.find(
+    (preference) => preference.key === "ntk_webtoon_next_domain_number",
+  );
+  const legacyUrl = preferences.find(
+    (preference) => preference.key === "ntk_webtoon_base_url",
+  );
+  const parser = preferences.find(
+    (preference) => preference.key === "ntk_webtoon_parser_family",
+  );
+
+  assert.equal(nextDomain.editTextPreference.value, "9");
+  assert.equal(legacyUrl.editTextPreference.title, "Legacy Base URL");
+  assert.deepEqual(Array.from(parser.listPreference.entries), ["Next", "Legacy"]);
+  assert.deepEqual(Array.from(parser.listPreference.entryValues), ["next", "legacy"]);
+  assert.equal(parser.listPreference.valueIndex, 0);
+});
