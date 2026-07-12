@@ -12,7 +12,7 @@ const mangayomiSources = [
     isNsfw: true,
     hasCloudflare: false,
     sourceCodeUrl:
-      "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/codex/webtoon-rebuild/javascript/manga/src/ko/ntk_webtoon.js",
+      "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_webtoon.js",
     apiUrl: "",
     version: "0.1.0",
     isManga: true,

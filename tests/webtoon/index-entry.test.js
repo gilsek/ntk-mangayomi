@@ -32,7 +32,10 @@ test("registers the rebuild Webtoon source for client list testing", () => {
     path.posix.basename(new URL(webtoon.sourceCodeUrl).pathname),
     "ntk_webtoon.js",
   );
-  assert.match(webtoon.sourceCodeUrl, /\/codex\/webtoon-rebuild\//);
+  assert.equal(
+    webtoon.sourceCodeUrl,
+    "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_webtoon.js",
+  );
   assert.equal(webtoon.additionalParams, "");
   assert.match(webtoon.notes, /list.*search.*filter/i);
   assert.match(webtoon.notes, /detail.*reader.*not implemented/i);
