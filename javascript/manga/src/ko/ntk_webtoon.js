@@ -2,11 +2,11 @@ const mangayomiSources = [
   {
     name: "NTK Webtoon",
     id: 260713001,
-    baseUrl: "https://newtoki1.org",
+    baseUrl: "https://sbxh9.com",
     lang: "ko",
     typeSource: "single",
     iconUrl:
-      "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
+      "https://www.google.com/s2/favicons?sz=128&domain=https://sbxh9.com",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: true,
@@ -14,7 +14,7 @@ const mangayomiSources = [
     sourceCodeUrl:
       "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_webtoon.js",
     apiUrl: "",
-    version: "0.1.0",
+    version: "0.101",
     isManga: true,
     itemType: 0,
     isFullData: false,
@@ -22,13 +22,16 @@ const mangayomiSources = [
     additionalParams: "",
     sourceCodeLanguage: 1,
     notes:
-      "Development preview: list, search, and filters only; detail and reader are not implemented.",
+      "Next Popular preview only; latest, search, filters, detail, and reader are not implemented.",
     pkgPath: "manga/src/ko/ntk_webtoon.js",
   },
 ];
 
 const BASE_URL_PREFERENCE = "ntk_webtoon_base_url";
 const PARSER_FAMILY_PREFERENCE = "ntk_webtoon_parser_family";
+const LEGACY_DEFAULT_BASE_URL = "https://newtoki1.org";
+const NEXT_DEFAULT_DOMAIN_NUMBER = "9";
+const NEXT_DOMAIN_NUMBER_PREFERENCE = "ntk_webtoon_next_domain_number";
 
 class DefaultExtension extends MProvider {
   get supportsLatest() {
@@ -44,14 +47,35 @@ class DefaultExtension extends MProvider {
   }
 
   getBaseUrl() {
+    return this.getParserFamily() === "next"
+      ? this.getNextBaseUrl()
+      : this.getLegacyBaseUrl();
+  }
+
+  getLegacyBaseUrl() {
     const configured = new SharedPreferences().get(BASE_URL_PREFERENCE);
-    const baseUrl = (configured || this.source.baseUrl).trim();
+    const baseUrl = (configured || LEGACY_DEFAULT_BASE_URL).trim();
     return baseUrl.replace(/\/+$/, "");
+  }
+
+  getNextDomainNumber() {
+    const configured = new SharedPreferences().get(
+      NEXT_DOMAIN_NUMBER_PREFERENCE,
+    );
+    const value = (configured || "").trim() || NEXT_DEFAULT_DOMAIN_NUMBER;
+    if (!/^\d+$/.test(value)) {
+      throw new Error(`Invalid Next domain number=${value}`);
+    }
+    return value;
+  }
+
+  getNextBaseUrl() {
+    return `https://sbxh${this.getNextDomainNumber()}.com`;
   }
 
   getParserFamily() {
     return (
-      new SharedPreferences().get(PARSER_FAMILY_PREFERENCE) || "legacy"
+      new SharedPreferences().get(PARSER_FAMILY_PREFERENCE) || "next"
     ).trim();
   }
 
@@ -114,6 +138,105 @@ class DefaultExtension extends MProvider {
     if (value.startsWith("//")) return `https:${value}`;
     if (value.startsWith("/")) return `${this.getBaseUrl()}${value}`;
     return `${this.getBaseUrl()}/${value}`;
+  }
+
+  buildNextPopularUrl() {
+    return `${this.getNextBaseUrl()}/rank?period=week&kind=webtoon`;
+  }
+
+  parseNextRankCard(element, titleSelector, requestUrl) {
+    const name = (element.selectFirst(titleSelector).text || "").trim();
+    if (!name) {
+      throw new Error(
+        `Next Webtoon structure error parserFamily=next url=${requestUrl} missing=${titleSelector}`,
+      );
+    }
+
+    const link = element.getHref || element.attr("href") || "";
+    if (!link) {
+      throw new Error(
+        `Next Webtoon structure error parserFamily=next url=${requestUrl} missing=rank href`,
+      );
+    }
+
+    const cover = element.selectFirst(".rank-v2-cover img");
+    const image = cover.getSrc || cover.attr("src") || "";
+
+    return {
+      name,
+      link,
+      imageUrl: this.toAbsoluteUrl(image),
+    };
+  }
+
+  parseNextChampion(element, requestUrl) {
+    return this.parseNextRankCard(element, "h2", requestUrl);
+  }
+
+  parseNextRunner(element, requestUrl) {
+    return this.parseNextRankCard(
+      element,
+      ".rank-v2-runner-body > strong",
+      requestUrl,
+    );
+  }
+
+  parseNextRow(element, requestUrl) {
+    return this.parseNextRankCard(
+      element,
+      ".rank-v2-row-title > strong",
+      requestUrl,
+    );
+  }
+
+  parseNextPopularResponse(response, requestUrl) {
+    if (response.statusCode < 200 || response.statusCode >= 400) {
+      throw new Error(
+        `Next Webtoon HTTP ${response.statusCode} parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    const contentType =
+      response.headers?.["content-type"] ||
+      response.headers?.["Content-Type"] ||
+      "";
+    if (contentType && !contentType.toLowerCase().includes("text/html")) {
+      throw new Error(
+        `Next Webtoon non-HTML response parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    const document = new Document(response.body);
+    if (document.select(".rank-v2-page").length === 0) {
+      throw new Error(
+        `Next Webtoon structure error parserFamily=next url=${requestUrl} missing=.rank-v2-page`,
+      );
+    }
+
+    const champions = document
+      .select("a.rank-v2-champion")
+      .map((element) => this.parseNextChampion(element, requestUrl));
+    const runners = document
+      .select("a.rank-v2-runner")
+      .map((element) => this.parseNextRunner(element, requestUrl));
+    const rows = document
+      .select("a.rank-v2-row")
+      .map((element) => this.parseNextRow(element, requestUrl));
+    const list = [...champions, ...runners, ...rows];
+
+    if (list.length === 0) {
+      throw new Error(
+        `Next Webtoon structure error parserFamily=next url=${requestUrl} missing=rank cards`,
+      );
+    }
+
+    return { list, hasNextPage: false };
+  }
+
+  async fetchNextPopular() {
+    const requestUrl = this.buildNextPopularUrl();
+    const response = await new Client().get(requestUrl, this.getHeaders());
+    return this.parseNextPopularResponse(response, requestUrl);
   }
 
   parseLegacyListItem(element, requestUrl) {
@@ -209,6 +332,10 @@ class DefaultExtension extends MProvider {
   }
 
   async getPopular(page) {
+    if (this.getParserFamily() === "next") {
+      if (page > 1) return { list: [], hasNextPage: false };
+      return this.fetchNextPopular();
+    }
     return this.fetchLegacyList({ mode: "popular", page });
   }
 

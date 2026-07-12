@@ -5,6 +5,16 @@ const test = require("node:test");
 
 const { loadWebtoonSource } = require("./helpers/load-webtoon-source");
 
+function loadLegacyWebtoonSource(options = {}) {
+  return loadWebtoonSource({
+    ...options,
+    preferences: {
+      ...options.preferences,
+      ntk_webtoon_parser_family: "legacy",
+    },
+  });
+}
+
 const fixtureDirectory = path.join(__dirname, "fixtures");
 
 function fixture(name) {
@@ -16,7 +26,7 @@ function plain(value) {
 }
 
 test("parses numeric and slug work links without interpreting opaque keys", async () => {
-  const { extension } = loadWebtoonSource({
+  const { extension } = loadLegacyWebtoonSource({
     body: fixture("legacy-list-page-1.html"),
   });
 
@@ -40,7 +50,7 @@ test("parses numeric and slug work links without interpreting opaque keys", asyn
 });
 
 test("uses page numbers instead of the right arrow to detect the last page", async () => {
-  const { extension } = loadWebtoonSource({
+  const { extension } = loadLegacyWebtoonSource({
     body: fixture("legacy-list-last-page.html"),
   });
 
@@ -51,7 +61,7 @@ test("uses page numbers instead of the right arrow to detect the last page", asy
 });
 
 test("keeps works that have no cover image", async () => {
-  const { extension } = loadWebtoonSource({
+  const { extension } = loadLegacyWebtoonSource({
     body: fixture("legacy-list-missing-cover.html"),
   });
 
@@ -70,7 +80,7 @@ test("keeps works that have no cover image", async () => {
 });
 
 test("returns a normal empty page only when the wr-none marker exists", async () => {
-  const { extension } = loadWebtoonSource({
+  const { extension } = loadLegacyWebtoonSource({
     body: fixture("legacy-list-empty.html"),
   });
 
@@ -81,7 +91,7 @@ test("returns a normal empty page only when the wr-none marker exists", async ()
 });
 
 test("reports a structure error when both list and empty markers are absent", async () => {
-  const { extension } = loadWebtoonSource({
+  const { extension } = loadLegacyWebtoonSource({
     body: "<html><body>maintenance</body></html>",
   });
 
@@ -92,7 +102,7 @@ test("reports a structure error when both list and empty markers are absent", as
 });
 
 test("reports malformed rows instead of silently dropping them", async () => {
-  const { extension } = loadWebtoonSource({
+  const { extension } = loadLegacyWebtoonSource({
     body: '<ul id="webtoon-list-all"><li><a href="/webtoon/123">제목 없음</a></li></ul>',
   });
 
@@ -103,11 +113,11 @@ test("reports malformed rows instead of silently dropping them", async () => {
 });
 
 test("does not convert non-HTML or HTTP failures into empty pages", async () => {
-  const nonHtml = loadWebtoonSource({
+  const nonHtml = loadLegacyWebtoonSource({
     body: "{}",
     headers: { "content-type": "application/json" },
   });
-  const serverError = loadWebtoonSource({ statusCode: 503 });
+  const serverError = loadLegacyWebtoonSource({ statusCode: 503 });
 
   await assert.rejects(
     () => nonHtml.extension.getPopular(1),

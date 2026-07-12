@@ -46,7 +46,18 @@ function stripTags(html) {
 function matchingElements(html, selector) {
   const results = [];
 
-  if (selector === 'a[href^="/webtoon/"]') {
+  if (
+    selector === "a.rank-v2-champion" ||
+    selector === "a.rank-v2-runner" ||
+    selector === "a.rank-v2-row"
+  ) {
+    const className = selector.slice(2);
+    for (const match of html.matchAll(/(<a\b[^>]*>)([\s\S]*?)<\/a>/gi)) {
+      if (hasClass(match[1], className)) {
+        results.push(new TestElement(match[0], match[1]));
+      }
+    }
+  } else if (selector === 'a[href^="/webtoon/"]') {
     for (const match of html.matchAll(/(<a\b[^>]*>)([\s\S]*?)<\/a>/gi)) {
       if (readAttribute(match[1], "href").startsWith("/webtoon/")) {
         results.push(new TestElement(match[0], match[1]));
@@ -79,6 +90,41 @@ function matchingElements(html, selector) {
     )) {
       if (hasClass(match[1], "list-date")) {
         results.push(new TestElement(match[0], match[1]));
+      }
+    }
+  } else if (selector === "h2") {
+    for (const match of html.matchAll(/(<h2\b[^>]*>)([\s\S]*?)<\/h2>/gi)) {
+      results.push(new TestElement(match[0], match[1]));
+    }
+  } else if (selector === ".rank-v2-runner-body > strong") {
+    const body = html.match(
+      /<span\b[^>]*class=["'][^"']*rank-v2-runner-body[^"']*["'][^>]*>([\s\S]*?)<\/span>/i,
+    );
+    if (body) {
+      for (const match of body[1].matchAll(
+        /(<strong\b[^>]*>)([\s\S]*?)<\/strong>/gi,
+      )) {
+        results.push(new TestElement(match[0], match[1]));
+      }
+    }
+  } else if (selector === ".rank-v2-row-title > strong") {
+    const title = html.match(
+      /<div\b[^>]*class=["'][^"']*rank-v2-row-title[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    );
+    if (title) {
+      for (const match of title[1].matchAll(
+        /(<strong\b[^>]*>)([\s\S]*?)<\/strong>/gi,
+      )) {
+        results.push(new TestElement(match[0], match[1]));
+      }
+    }
+  } else if (selector === ".rank-v2-cover img") {
+    const cover = html.match(
+      /<div\b[^>]*class=["'][^"']*rank-v2-cover[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    );
+    if (cover) {
+      for (const match of cover[1].matchAll(/<img\b[^>]*>/gi)) {
+        results.push(new TestElement(match[0], match[0]));
       }
     }
   }
@@ -123,6 +169,12 @@ class TestDocument {
   }
 
   select(selector) {
+    if (selector === ".rank-v2-page") {
+      return Array.from(this.html.matchAll(/<[^>]+>/gi))
+        .filter((match) => hasClass(match[0], "rank-v2-page"))
+        .map((match) => new TestElement(match[0], match[0]));
+    }
+
     if (selector === "#webtoon-list-all > li") {
       const container = this.html.match(
         /<(ul|div)\b[^>]*id=["']webtoon-list-all["'][^>]*>([\s\S]*?)<\/\1>/i,

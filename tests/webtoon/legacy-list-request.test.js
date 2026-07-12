@@ -3,13 +3,23 @@ const test = require("node:test");
 
 const { loadWebtoonSource } = require("./helpers/load-webtoon-source");
 
+function loadLegacyWebtoonSource(options = {}) {
+  return loadWebtoonSource({
+    ...options,
+    preferences: {
+      ...options.preferences,
+      ntk_webtoon_parser_family: "legacy",
+    },
+  });
+}
+
 function parsedRequest(requests) {
   assert.equal(requests.length, 1);
   return new URL(requests[0].url);
 }
 
 test("builds the popular request with the fixed Legacy parameters", async () => {
-  const { extension, requests } = loadWebtoonSource();
+  const { extension, requests } = loadLegacyWebtoonSource();
 
   await extension.getPopular(1);
 
@@ -22,9 +32,8 @@ test("builds the popular request with the fixed Legacy parameters", async () => 
   assert.equal(url.searchParams.get("sod"), "desc");
   assert.equal(url.searchParams.has("page"), false);
 });
-
 test("builds the latest request and includes pages after page one", async () => {
-  const { extension, requests } = loadWebtoonSource();
+  const { extension, requests } = loadLegacyWebtoonSource();
 
   await extension.getLatestUpdates(2);
 
@@ -34,7 +43,7 @@ test("builds the latest request and includes pages after page one", async () => 
 });
 
 test("uses the manually configured base URL without duplicate slashes", async () => {
-  const { extension, requests } = loadWebtoonSource({
+  const { extension, requests } = loadLegacyWebtoonSource({
     preferences: {
       ntk_webtoon_base_url: "https://mirror.example/",
       ntk_webtoon_parser_family: "legacy",
@@ -48,7 +57,7 @@ test("uses the manually configured base URL without duplicate slashes", async ()
 });
 
 test("sends normal title search parameters and never generates __q", async () => {
-  const { extension, requests } = loadWebtoonSource();
+  const { extension, requests } = loadLegacyWebtoonSource();
 
   await extension.search("테스트", 1, []);
 
@@ -59,7 +68,7 @@ test("sends normal title search parameters and never generates __q", async () =>
 });
 
 test("returns an empty page without a request for one-character titles", async () => {
-  const { extension, requests } = loadWebtoonSource();
+  const { extension, requests } = loadLegacyWebtoonSource();
 
   const result = await extension.search("가", 1, []);
 
@@ -71,7 +80,7 @@ test("returns an empty page without a request for one-character titles", async (
 });
 
 test("still requests an empty title when filters are present", async () => {
-  const { extension, requests } = loadWebtoonSource();
+  const { extension, requests } = loadLegacyWebtoonSource();
 
   await extension.search("", 1, [
     {
@@ -87,13 +96,4 @@ test("still requests an empty title when filters are present", async () => {
   const url = parsedRequest(requests);
   assert.equal(url.searchParams.has("stx"), false);
   assert.equal(url.searchParams.get("toon"), "성인웹툰");
-});
-
-test("rejects unsupported parser families instead of falling back", async () => {
-  const { extension, requests } = loadWebtoonSource({
-    preferences: { ntk_webtoon_parser_family: "next" },
-  });
-
-  await assert.rejects(() => extension.getPopular(1), /parserFamily=next/);
-  assert.equal(requests.length, 0);
 });

@@ -2,24 +2,24 @@
   {
     "name": "NTK Webtoon",
     "id": 260713001,
-    "baseUrl": "https://newtoki1.org",
+    "baseUrl": "https://sbxh9.com",
     "lang": "ko",
     "typeSource": "single",
-    "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
+    "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://sbxh9.com",
     "dateFormat": "yy.MM.dd",
     "dateFormatLocale": "ko",
     "isNsfw": true,
     "hasCloudflare": false,
     "sourceCodeUrl": "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_webtoon.js",
     "apiUrl": "",
-    "version": "0.1.0",
+    "version": "0.101",
     "isManga": true,
     "itemType": 0,
     "isFullData": false,
     "appMinVerReq": "0.5.0",
     "additionalParams": "",
     "sourceCodeLanguage": 1,
-    "notes": "Development preview: list, search, and filters only; detail and reader are not implemented."
+    "notes": "Next Popular preview only; latest, search, filters, detail, and reader are not implemented."
   },
   {
     "name": "NTK Manhwa",

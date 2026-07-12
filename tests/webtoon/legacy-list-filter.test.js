@@ -3,6 +3,16 @@ const test = require("node:test");
 
 const { loadWebtoonSource } = require("./helpers/load-webtoon-source");
 
+function loadLegacyWebtoonSource(options = {}) {
+  return loadWebtoonSource({
+    ...options,
+    preferences: {
+      ...options.preferences,
+      ntk_webtoon_parser_family: "legacy",
+    },
+  });
+}
+
 function filterByType(filters, type) {
   const filter = filters.find((candidate) => candidate.type === type);
   assert.ok(filter, `missing filter type=${type}`);
@@ -16,7 +26,7 @@ function optionPairs(filter) {
 }
 
 test("exposes the approved Legacy Webtoon filter types", () => {
-  const { extension } = loadWebtoonSource();
+  const { extension } = loadLegacyWebtoonSource();
   const filters = extension.getFilterList();
 
   assert.equal(filterByType(filters, "author").type_name, "TextFilter");
@@ -34,7 +44,7 @@ test("exposes the approved Legacy Webtoon filter types", () => {
 });
 
 test("exposes the exact category weekday platform and sort mappings", () => {
-  const { extension } = loadWebtoonSource();
+  const { extension } = loadLegacyWebtoonSource();
   const filters = extension.getFilterList();
 
   assert.deepEqual(optionPairs(filterByType(filters, "category")), [
@@ -80,7 +90,7 @@ test("exposes the exact category weekday platform and sort mappings", () => {
 });
 
 test("exposes every approved initial and genre value", () => {
-  const { extension } = loadWebtoonSource();
+  const { extension } = loadLegacyWebtoonSource();
   const filters = extension.getFilterList();
 
   assert.deepEqual(
@@ -128,7 +138,7 @@ test("exposes every approved initial and genre value", () => {
 });
 
 test("serializes text and select filters to their independent query fields", async () => {
-  const { extension, requests } = loadWebtoonSource();
+  const { extension, requests } = loadLegacyWebtoonSource();
   const filters = extension.getFilterList();
 
   filterByType(filters, "author").state = "박태준";
@@ -155,7 +165,7 @@ test("serializes text and select filters to their independent query fields", asy
 });
 
 test("omits empty filter values and resets search to page one", async () => {
-  const { extension, requests } = loadWebtoonSource();
+  const { extension, requests } = loadLegacyWebtoonSource();
 
   await extension.search("", 1, extension.getFilterList());
 
