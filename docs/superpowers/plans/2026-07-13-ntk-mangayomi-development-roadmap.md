@@ -489,9 +489,9 @@ tests/anime/
 - Popular은 `GET /rank?period=week&kind=webtoon`을 사용한다.
 - 랭킹은 단일 50개 페이지이므로 두 번째 페이지부터는 네트워크 요청 없이 빈 목록을 반환한다.
 - Next 전용 champion, runner, row 선택자를 각각 사용하며 Legacy 선택자로 fallback하지 않는다.
-- 현재 버전은 `0.101`이며 Next Latest, 검색과 필터는 아직 노출하지 않는다.
-- Next Latest의 확정 주소는 `/ing`이지만 이번 구현 범위에는 포함하지 않는다.
-- Mangayomi에서 Popular 목록을 수동 검증한 다음 Next 전체 필터와 제목 검색의 현재 요청·응답을 직접 추출한다.
+- `0.101` 당시에는 Next Latest, 검색과 필터를 아직 노출하지 않았다.
+- Next Latest의 확정 주소는 `/ing`이었지만 `0.101` 구현 범위에는 포함하지 않았다.
+- `0.101` 당시 계획은 Mangayomi에서 Popular 목록을 수동 검증한 다음 Next 전체 필터와 제목 검색의 현재 요청·응답을 직접 추출하는 것이었다.
 - 과거 Legacy 구현은 삭제하거나 Next 파서에 섞지 않는다. 네 Next Source가 완료된 뒤 별도 순서로 재검증한다.
 
 ## 17. 2026-07-13 Next Webtoon Latest·검색 구현 체크포인트
