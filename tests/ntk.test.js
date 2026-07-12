@@ -660,9 +660,17 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.3.11", "0.3.6", "0.3.7"]);
-  assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
-  for (const source of index) {
+  assert.deepEqual(index.map((source) => source.version), ["0.1.0", "0.3.6", "0.3.7"]);
+  assert.deepEqual(index.map((source) => source.additionalParams), ["", "source=manga", "source=novel"]);
+
+  const [webtoon, ...legacySources] = index;
+  assert.equal(webtoon.id, 260713001);
+  assert.equal(webtoon.baseUrl, "https://newtoki1.org");
+  assert.equal(webtoon.sourceCodeLanguage, 1);
+  assert.equal(webtoon.isNsfw, true);
+  assert.match(webtoon.sourceCodeUrl, /javascript\/manga\/src\/ko\/ntk_webtoon\.js$/);
+
+  for (const source of legacySources) {
     assert.equal(source.baseUrl, "https://toki30.com");
     assert.equal(source.sourceCodeLanguage, 1);
     assert.equal(source.isNsfw, false);
@@ -672,7 +680,35 @@ test("repository manifests are consistent", () => {
 
 test("embedded mangayomiSources match repository index", () => {
   const index = JSON.parse(fs.readFileSync("index.json", "utf8"));
-  assert.deepEqual(ntkModule.mangayomiSources.map((source) => source.name), index.map((source) => source.name));
-  assert.deepEqual(ntkModule.mangayomiSources.map((source) => source.version), index.map((source) => source.version));
-  assert.deepEqual(ntkModule.mangayomiSources.map((source) => source.additionalParams), index.map((source) => source.additionalParams));
+  const legacyIndex = index.filter((source) => source.id !== 260713001);
+  const legacyEmbedded = ntkModule.mangayomiSources.filter(
+    (source) => source.id !== 240710001,
+  );
+  const { loadWebtoonSource } = require("./webtoon/helpers/load-webtoon-source");
+  const [webtoonEmbedded] = loadWebtoonSource().sources;
+  const webtoonIndex = index.find((source) => source.id === 260713001);
+
+  assert.deepEqual(
+    legacyEmbedded.map((source) => source.name),
+    legacyIndex.map((source) => source.name),
+  );
+  assert.deepEqual(
+    legacyEmbedded.map((source) => source.version),
+    legacyIndex.map((source) => source.version),
+  );
+  assert.deepEqual(
+    legacyEmbedded.map((source) => source.additionalParams),
+    legacyIndex.map((source) => source.additionalParams),
+  );
+  for (const key of [
+    "name",
+    "id",
+    "baseUrl",
+    "version",
+    "isNsfw",
+    "sourceCodeUrl",
+    "additionalParams",
+  ]) {
+    assert.deepEqual(webtoonEmbedded[key], webtoonIndex[key]);
+  }
 });

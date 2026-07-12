@@ -1,0 +1,356 @@
+const mangayomiSources = [
+  {
+    name: "NTK Webtoon",
+    id: 260713001,
+    baseUrl: "https://newtoki1.org",
+    lang: "ko",
+    typeSource: "single",
+    iconUrl:
+      "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
+    dateFormat: "yy.MM.dd",
+    dateFormatLocale: "ko",
+    isNsfw: true,
+    hasCloudflare: false,
+    sourceCodeUrl:
+      "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/codex/webtoon-rebuild/javascript/manga/src/ko/ntk_webtoon.js",
+    apiUrl: "",
+    version: "0.1.0",
+    isManga: true,
+    itemType: 0,
+    isFullData: false,
+    appMinVerReq: "0.5.0",
+    additionalParams: "",
+    sourceCodeLanguage: 1,
+    notes:
+      "Development preview: list, search, and filters only; detail and reader are not implemented.",
+    pkgPath: "manga/src/ko/ntk_webtoon.js",
+  },
+];
+
+const BASE_URL_PREFERENCE = "ntk_webtoon_base_url";
+const PARSER_FAMILY_PREFERENCE = "ntk_webtoon_parser_family";
+
+class DefaultExtension extends MProvider {
+  get supportsLatest() {
+    return true;
+  }
+
+  getHeaders() {
+    return {
+      Referer: `${this.getBaseUrl()}/`,
+      "User-Agent":
+        "Mozilla/5.0 (Linux; Android 15; Tablet) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    };
+  }
+
+  getBaseUrl() {
+    const configured = new SharedPreferences().get(BASE_URL_PREFERENCE);
+    const baseUrl = (configured || this.source.baseUrl).trim();
+    return baseUrl.replace(/\/+$/, "");
+  }
+
+  getParserFamily() {
+    return (
+      new SharedPreferences().get(PARSER_FAMILY_PREFERENCE) || "legacy"
+    ).trim();
+  }
+
+  assertLegacyParser() {
+    const parserFamily = this.getParserFamily();
+    if (parserFamily !== "legacy") {
+      throw new Error(`Unsupported parserFamily=${parserFamily}`);
+    }
+  }
+
+  appendParameter(parameters, name, value) {
+    if (value === undefined || value === null || value === "") return;
+    parameters.push(`${encodeURIComponent(name)}=${encodeURIComponent(value)}`);
+  }
+
+  buildLegacyListUrl({ mode, query = "", page = 1, filters = [] }) {
+    const parameters = [];
+    this.appendParameter(parameters, "kind", "webtoon");
+    this.appendParameter(parameters, "pub", "ongoing");
+
+    const normalizedQuery = query.trim();
+    this.appendParameter(parameters, "stx", normalizedQuery);
+
+    let sort = mode === "popular" ? "as_view" : "as_update";
+    const fields = {
+      author: "author",
+      category: "toon",
+      weekday: "yoil",
+      initial: "jaum",
+      platform: "plat",
+      genre: "tag",
+    };
+
+    for (const filter of filters || []) {
+      if (filter.type === "author") {
+        this.appendParameter(parameters, "author", (filter.state || "").trim());
+        continue;
+      }
+
+      const option = filter.values?.[filter.state];
+      if (filter.type === "sort") {
+        sort = option?.value || sort;
+        continue;
+      }
+
+      const field = fields[filter.type];
+      if (field) this.appendParameter(parameters, field, option?.value || "");
+    }
+
+    this.appendParameter(parameters, "sst", sort);
+    this.appendParameter(parameters, "sod", "desc");
+    if (page > 1) this.appendParameter(parameters, "page", String(page));
+
+    return `${this.getBaseUrl()}/webtoon?${parameters.join("&")}`;
+  }
+
+  toAbsoluteUrl(value) {
+    if (!value) return "";
+    if (/^https?:\/\//i.test(value)) return value;
+    if (value.startsWith("//")) return `https:${value}`;
+    if (value.startsWith("/")) return `${this.getBaseUrl()}${value}`;
+    return `${this.getBaseUrl()}/${value}`;
+  }
+
+  parseLegacyListItem(element, requestUrl) {
+    const titleElement = element.selectFirst("span.title.white");
+    const name = (titleElement.text || "").trim();
+    if (!name) {
+      throw new Error(
+        `Legacy Webtoon structure error parserFamily=legacy url=${requestUrl} missing=span.title.white`,
+      );
+    }
+
+    const linkElement = element.selectFirst('a[href^="/webtoon/"]');
+    const link = linkElement.getHref || linkElement.attr("href") || "";
+    if (!link) {
+      throw new Error(
+        `Legacy Webtoon structure error parserFamily=legacy url=${requestUrl} missing=a[href^=\"/webtoon/\"]`,
+      );
+    }
+
+    const imageElement = element.selectFirst("img.theme-thumb-img");
+    const image = imageElement.getSrc || imageElement.attr("src") || "";
+
+    return {
+      name,
+      link,
+      imageUrl: this.toAbsoluteUrl(image),
+    };
+  }
+
+  hasLegacyNextPage(document, requestedPage) {
+    const active = document.selectFirst(
+      "ul.pagination-desktop li.active a",
+    );
+    const activeNumber = Number.parseInt((active.text || "").trim(), 10);
+    const currentPage = Number.isFinite(activeNumber)
+      ? activeNumber
+      : requestedPage;
+    let maxPage = currentPage;
+
+    for (const anchor of document.select("ul.pagination-desktop a")) {
+      const href = anchor.getHref || anchor.attr("href") || "";
+      const hrefMatch = href.match(/[?&]page=(\d+)/);
+      const textNumber = Number.parseInt((anchor.text || "").trim(), 10);
+      if (hrefMatch) maxPage = Math.max(maxPage, Number(hrefMatch[1]));
+      if (Number.isFinite(textNumber)) maxPage = Math.max(maxPage, textNumber);
+    }
+
+    return currentPage < maxPage;
+  }
+
+  parseLegacyListResponse(response, requestUrl, requestedPage) {
+    if (response.statusCode < 200 || response.statusCode >= 400) {
+      throw new Error(
+        `Legacy Webtoon HTTP ${response.statusCode} parserFamily=legacy url=${requestUrl}`,
+      );
+    }
+
+    const contentType =
+      response.headers?.["content-type"] ||
+      response.headers?.["Content-Type"] ||
+      "";
+    if (contentType && !contentType.toLowerCase().includes("text/html")) {
+      throw new Error(
+        `Legacy Webtoon non-HTML response parserFamily=legacy url=${requestUrl}`,
+      );
+    }
+
+    const document = new Document(response.body);
+    if (document.select("div.wr-none").length > 0) {
+      return { list: [], hasNextPage: false };
+    }
+
+    const elements = document.select("#webtoon-list-all > li");
+    if (elements.length > 0) {
+      return {
+        list: elements.map((element) =>
+          this.parseLegacyListItem(element, requestUrl),
+        ),
+        hasNextPage: this.hasLegacyNextPage(document, requestedPage),
+      };
+    }
+
+    throw new Error(
+      `Legacy Webtoon structure error parserFamily=legacy url=${requestUrl} missing=#webtoon-list-all,div.wr-none`,
+    );
+  }
+
+  async fetchLegacyList(options) {
+    this.assertLegacyParser();
+    const requestUrl = this.buildLegacyListUrl(options);
+    const response = await new Client().get(requestUrl, this.getHeaders());
+    return this.parseLegacyListResponse(response, requestUrl, options.page || 1);
+  }
+
+  async getPopular(page) {
+    return this.fetchLegacyList({ mode: "popular", page });
+  }
+
+  async getLatestUpdates(page) {
+    return this.fetchLegacyList({ mode: "latest", page });
+  }
+
+  async search(query, page, filters) {
+    const normalizedQuery = query.trim();
+    if (normalizedQuery.length === 1) {
+      return { list: [], hasNextPage: false };
+    }
+
+    return this.fetchLegacyList({
+      mode: "search",
+      query: normalizedQuery,
+      page,
+      filters,
+    });
+  }
+
+  getFilterList() {
+    const select = (type, name, values) => ({
+      type_name: "SelectFilter",
+      type,
+      name,
+      state: 0,
+      values: values.map(([optionName, value]) => ({
+        type_name: "SelectOption",
+        name: optionName,
+        value,
+      })),
+    });
+
+    return [
+      {
+        type_name: "TextFilter",
+        type: "author",
+        name: "작가",
+        state: "",
+      },
+      select("category", "분류", [
+        ["전체/일반", ""],
+        ["성인웹툰", "성인웹툰"],
+        ["BL/GL", "BL/GL"],
+        ["완결웹툰", "완결웹툰"],
+      ]),
+      select("weekday", "요일", [
+        ["전체", ""],
+        ["월", "월"],
+        ["화", "화"],
+        ["수", "수"],
+        ["목", "목"],
+        ["금", "금"],
+        ["토", "토"],
+        ["일", "일"],
+        ["열흘", "열흘"],
+      ]),
+      select("initial", "초성", [
+        ["전체", ""],
+        ["ㄱ", "ㄱ"],
+        ["ㄴ", "ㄴ"],
+        ["ㄷ", "ㄷ"],
+        ["ㄹ", "ㄹ"],
+        ["ㅁ", "ㅁ"],
+        ["ㅂ", "ㅂ"],
+        ["ㅅ", "ㅅ"],
+        ["ㅇ", "ㅇ"],
+        ["ㅈ", "ㅈ"],
+        ["ㅊ", "ㅊ"],
+        ["ㅋ", "ㅋ"],
+        ["ㅌ", "ㅌ"],
+        ["ㅍ", "ㅍ"],
+        ["ㅎ", "ㅎ"],
+        ["영문", "a-z"],
+        ["숫자", "0-9"],
+      ]),
+      select("platform", "플랫폼", [
+        ["전체", ""],
+        ["네이버", "1"],
+        ["카카오", "3"],
+        ["레진", "4"],
+        ["투믹스", "5"],
+        ["탑툰", "6"],
+        ["코미카", "7"],
+        ["배틀코믹스", "8"],
+        ["케이툰", "10"],
+        ["피너툰", "13"],
+        ["봄툰", "14"],
+        ["코미코", "15"],
+        ["기타", "99"],
+      ]),
+      select("genre", "장르", [
+        ["전체", ""],
+        ["판타지", "판타지"],
+        ["액션", "액션"],
+        ["개그", "개그"],
+        ["미스터리", "미스터리"],
+        ["로맨스", "로맨스"],
+        ["드라마", "드라마"],
+        ["무협", "무협"],
+        ["스포츠", "스포츠"],
+        ["일상", "일상"],
+        ["학원", "학원"],
+        ["성인", "성인"],
+        ["BLGL", "BLGL"],
+        ["한국", "한국"],
+        ["중국", "중국"],
+      ]),
+      select("sort", "정렬", [
+        ["최신순", "as_update"],
+        ["신작순", "as_new"],
+        ["북마크순", "as_bookmark"],
+        ["조회순", "as_view"],
+        ["평점순", "as_rating"],
+        ["화수순", "as_episode"],
+      ]),
+    ];
+  }
+
+  getSourcePreferences() {
+    return [
+      {
+        key: BASE_URL_PREFERENCE,
+        editTextPreference: {
+          title: "Base URL",
+          summary: "수동으로 사용할 NTK 계열 주소",
+          value: this.source.baseUrl,
+          dialogTitle: "Webtoon Base URL",
+          dialogMessage: "끝의 /는 자동으로 제거됩니다.",
+        },
+      },
+      {
+        key: PARSER_FAMILY_PREFERENCE,
+        listPreference: {
+          title: "Parser family",
+          summary: "주소에 맞는 파서 계열을 수동으로 선택합니다.",
+          valueIndex: 0,
+          entries: ["Legacy", "Next"],
+          entryValues: ["legacy", "next"],
+        },
+      },
+    ];
+  }
+}
