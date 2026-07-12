@@ -1,10 +1,10 @@
 # NTK Mangayomi 확장 개발 로드맵
 
-> **상태:** 조사·설계 계획 v0.2. 이 문서는 구현 순서와 승인 게이트를 정의하며, 코드 구현을 승인하는 문서가 아니다.
+> **상태:** Next Webtoon 단계별 구현 진행 중. 각 다음 구현 단계는 작업 범위를 설명하고 사용자 승인을 받은 뒤 시작한다.
 
 **목표:** 주소가 바뀔 수 있는 NTK 계열 사이트를 Mangayomi에서 사용할 수 있도록 Webtoon, Manhwa, Novel, Anime Source를 순서대로 독립 개발한다.
 
-**개발 순서:** Webtoon → Manhwa → Novel → Anime
+**개발 순서:** Next Webtoon → Next Manhwa → Next Novel → Next Anime → Legacy 계열
 
 ## 1. 확정된 원칙
 
@@ -24,7 +24,8 @@
 
 ### 확정된 Webtoon 목록 범위
 
-- 첫 Webtoon 버전부터 인기 목록, 최신 목록, 제목 검색과 전체 필터를 지원한다.
+- Webtoon 완성 범위는 인기 목록, 최신 목록, 제목 검색과 전체 필터를 모두 포함한다.
+- 현재 `0.101`은 Next 인기 목록만 먼저 검증하는 중간 버전이며, 클라이언트 확인 후 최신 목록·제목 검색·전체 필터를 순서대로 추가한다.
 - 자유어 검색의 대상은 작품 제목으로 한정한다.
 - 전체 필터는 사이트가 현재 제공하는 필터 항목과 값 전체를 의미한다.
 - Legacy와 Next의 필터 이름이 비슷해도 요청 파라미터나 값 체계가 다르면 별도로 구현한다.
@@ -63,20 +64,11 @@
 
 ## 3. 도메인과 파서 분리 설계
 
-Source 설정에서 다음 프로필을 제공하는 방향으로 설계한다.
+Source 설정은 `Next`와 `Legacy` 파서 계열을 사용자가 직접 선택한다. 자동 감지와 자동 전환은 넣지 않는다.
 
-- `Legacy`: 현재 Legacy 계열 기본 주소
-- `Next Primary`: 현재 Next 계열 주 주소
-- `Next Secondary`: 현재 Next 계열 보조 주소
-- `Custom`: 사용자가 직접 입력한 주소
-
-각 프로필은 개념적으로 다음 정보만 가진다.
-
-- 요청에 사용할 `baseUrl`
-- `legacy` 또는 `next` 파서 계열
-- 콘텐츠 종류별 목록 경로
-
-`baseUrl`은 요청 대상을 정할 뿐 파서 선택 기준이 아니다. 파서는 프로필의 계열 값으로 명시적으로 선택한다. 사용자 지정 주소는 사용자가 `baseUrl`과 `parserFamily`(`legacy` 또는 `next`)를 함께 지정한다. 초기 버전에서는 Custom 주소의 파서 계열을 자동 판별하거나 자동 변경하지 않는다.
+- `Next`는 `sbxh` 뒤의 숫자만 입력받아 `https://sbxh{number}.com`을 구성한다. 현재 기본값은 `9`다.
+- `Legacy`는 기존 전체 Base URL 설정을 별도로 유지한다.
+- 주소가 비슷해도 Next와 Legacy 선택자 및 파서는 섞거나 순차 fallback하지 않는다.
 
 설정은 Mangayomi의 Source 단위로 저장되므로 Webtoon, Manhwa, Novel, Anime에서 각각 지정해야 한다. 이 중복은 초기 버전에서 허용하며 전역 설정 동기화는 범위에서 제외한다.
 
@@ -259,17 +251,16 @@ Webtoon은 다음 세 기능을 각각 Legacy와 Next로 나눠 조사한다.
 
 1. 확장 저장소 최소 구조와 Webtoon Source 등록
 2. Source 프로필 설정과 상대 URL 처리
-3. Legacy 작품 목록
-4. Next 작품 목록
-5. 제목 검색, 전체 필터 및 페이지 처리
-6. Legacy 작품 상세와 회차 목록
-7. Next 작품 상세와 회차 목록
+3. Next 인기 작품 목록
+4. Next 최신 작품 목록 (`/ing`)
+5. Next 제목 검색, 전체 필터 및 페이지 처리
+6. Next 작품 상세와 회차 목록
+7. Next 회차 이미지와 proof 흐름
 8. 101회 초과 회차 처리
-9. Legacy 회차 이미지
-10. Next 회차 이미지와 proof 흐름
-11. Cloudflare WebView 재시도 연결
-12. iPhone 및 Android 패드 실기기 검증
-13. Webtoon 회귀 테스트와 완료 승인
+9. iPhone 및 Android 패드 실기기 검증
+10. Next Webtoon 회귀 테스트와 완료 승인
+11. Next Manhwa → Novel → Anime 순서로 독립 구현
+12. 네 Next Source 완료 후 Legacy 작품 목록·상세·본문을 별도 파서로 구현
 
 각 단계는 앞 단계의 테스트가 통과해야 시작한다. Legacy와 Next 구현은 같은 인터페이스를 사용할 수 있지만 선택자와 응답 파싱 함수는 공유하지 않는다.
 
@@ -471,15 +462,16 @@ tests/anime/
 
 ### 버전 정책
 
-Mangayomi의 버전 비교가 점으로 구분된 각 값을 숫자로 처리하므로 모든 Source 버전은 숫자형 `major.minor.patch`만 사용한다. `alpha`, `beta`, 날짜나 임의 문자열을 버전 필드에 넣지 않는다.
+버전 필드에는 숫자로 해석 가능한 값만 사용하며 `alpha`, `beta`, 날짜나 임의 문자열을 넣지 않는다.
 
-- `0.1.x`: Webtoon Source 프로토타입 개발과 검증
-- `0.2.x`: Manhwa Source 프로토타입 추가와 검증
-- `0.3.x`: Novel Source 프로토타입 추가와 검증
-- `0.4.x`: Anime Source 프로토타입 추가 및 네 Source 통합 안정화
-- `0.5.0`: Webtoon, Manhwa, Novel, Anime의 첫 프로토타입이 모두 각 완료 기준을 통과한 통합 마일스톤
+- `0.101`: 현재 Next Webtoon Popular 수동 검증 버전
+- `0.1xx`: Next Webtoon Source의 단계별 개발과 검증
+- `0.2`: Webtoon을 완료하고 Manhwa 개발을 시작하는 시점
+- `0.3`: Novel 개발 시작 시점
+- `0.4`: Anime 개발 시작 및 네 Next Source 통합 안정화 시점
+- `0.5`: Webtoon, Manhwa, Novel, Anime의 첫 프로토타입이 모두 완료 기준을 통과한 통합 마일스톤
 
-각 Source 파일이 변경될 때 해당 Source의 patch 버전을 올린다. 단계가 바뀌었다는 이유만으로 변경되지 않은 Source의 버전을 불필요하게 올리지는 않지만, `0.5.0` 통합 마일스톤을 배포할 때는 네 Source의 버전을 모두 `0.5.0`으로 맞춘다. 이후 수정은 `0.5.1`, `0.5.2`처럼 patch 버전부터 진행한다.
+각 Source 파일이 변경될 때 필요한 범위에서만 버전을 올린다. 단계가 바뀌었다는 이유만으로 변경되지 않은 Source 버전을 불필요하게 올리지 않는다.
 
 ### 단계적 등록 순서
 
@@ -489,3 +481,15 @@ Mangayomi의 버전 비교가 점으로 구분된 각 값을 숫자로 처리하
 4. 마지막으로 Anime 신규 엔트리를 등록한다.
 5. 네 Source가 완료 기준을 통과하면 모두 `0.5.0`으로 맞추고 첫 통합 프로토타입을 배포한다.
 6. 과거 `ntk.js`를 참조하는 엔트리가 없음을 검증한 뒤 별도 승인을 받아 과거 파일과 해당 테스트의 정리 여부를 결정한다.
+
+## 16. 2026-07-13 Next Webtoon Popular 구현 체크포인트
+
+- Source ID는 신규 ID `260713001`을 유지한다.
+- 기본 파서 계열은 `Next`, 기본 주소는 숫자 설정 `9`로 구성한 `https://sbxh9.com`이다.
+- Popular은 `GET /rank?period=week&kind=webtoon`을 사용한다.
+- 랭킹은 단일 50개 페이지이므로 두 번째 페이지부터는 네트워크 요청 없이 빈 목록을 반환한다.
+- Next 전용 champion, runner, row 선택자를 각각 사용하며 Legacy 선택자로 fallback하지 않는다.
+- 현재 버전은 `0.101`이며 Next Latest, 검색과 필터는 아직 노출하지 않는다.
+- Next Latest의 확정 주소는 `/ing`이지만 이번 구현 범위에는 포함하지 않는다.
+- Mangayomi에서 Popular 목록을 수동 검증한 다음 Next 전체 필터와 제목 검색의 현재 요청·응답을 직접 추출한다.
+- 과거 Legacy 구현은 삭제하거나 Next 파서에 섞지 않는다. 네 Next Source가 완료된 뒤 별도 순서로 재검증한다.
