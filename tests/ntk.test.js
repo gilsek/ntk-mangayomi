@@ -660,12 +660,12 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.1.0", "0.3.6", "0.3.7"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.101", "0.3.6", "0.3.7"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["", "source=manga", "source=novel"]);
 
   const [webtoon, ...legacySources] = index;
   assert.equal(webtoon.id, 260713001);
-  assert.equal(webtoon.baseUrl, "https://newtoki1.org");
+  assert.equal(webtoon.baseUrl, "https://sbxh9.com");
   assert.equal(webtoon.sourceCodeLanguage, 1);
   assert.equal(webtoon.isNsfw, true);
   assert.match(webtoon.sourceCodeUrl, /javascript\/manga\/src\/ko\/ntk_webtoon\.js$/);
