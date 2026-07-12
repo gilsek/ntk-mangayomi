@@ -8,7 +8,7 @@ const mangayomiSources = [
     iconUrl: "https://www.google.com/s2/favicons?sz=128&domain=https://toki30.com",
     typeSource: "single",
     itemType: 0,
-    version: "0.3.10",
+    version: "0.3.11",
     dateFormat: "yy.MM.dd",
     dateFormatLocale: "ko",
     isNsfw: false,
@@ -1304,6 +1304,7 @@ function createNtkSource(options = {}) {
       const parts = path.split("/").filter(Boolean);
       const workId = parts[1] || "";
       const episodeId = parts[parts.length - 1] || "";
+      if (/^nv-/i.test(episodeId)) return [];
       return [
         this.buildApiUrl(variant.imageEndpoint, { sourceWorkId: workId, episodeId }),
         this.buildApiUrl(variant.imageEndpoint, { workId, episodeId }),
@@ -1526,6 +1527,7 @@ class DefaultExtension extends ProviderBase {
           if (/app-cookie/.test(String(appCookieError && appCookieError.message))) blockingError = appCookieError;
         }
       }
+      if (blockingError) throw blockingError;
 
       const readerRes = await this.client.get(readerUrl, headersWithCookie(headers, cookieHeader));
       cookieHeader = mergeSetCookie(cookieHeader, responseHeader(readerRes, "set-cookie"));

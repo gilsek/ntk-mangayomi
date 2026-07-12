@@ -74,6 +74,13 @@ test("defaults title search to all statuses", () => {
   );
 });
 
+test("skips legacy image candidates for current nv reader routes", () => {
+  const source = ntk.createNtkSource({ variant: "webtoon" });
+
+  assert.deepEqual(source.__buildImageCandidates("/webtoon/850546/nv-850546-7"), []);
+  assert.equal(source.__buildImageCandidates("/webtoon/850546/123456").length, 3);
+});
+
 test("migrates the previous default BaseUrl preference", () => {
   const previousSharedPreferences = global.SharedPreferences;
   let saved;
@@ -331,6 +338,45 @@ test("lets the reader WebView send image API requests directly", () => {
       Accept: "text/html"
     }
   );
+});
+
+test("falls back to WebView after the current image API rejects the request", async () => {
+  const previousEvaluate = global.evaluateJavascriptViaWebview;
+  const extension = new ntkModule.DefaultExtension();
+  const getCalls = [];
+  extension.source = {
+    name: "NTK Webtoon",
+    baseUrl: "https://toki30.com",
+    additionalParams: "source=webtoon"
+  };
+  extension.client = {
+    async get(url) {
+      getCalls.push(url);
+      if (getCalls.length > 1) throw new Error("reader requested twice");
+      return {
+        statusCode: 200,
+        body: '{"sourceWorkId":"850546","episodeId":"7","imagesToken":"token.value"}'
+      };
+    },
+    async post(url) {
+      if (url.endsWith("/api/nv-issue")) {
+        return { statusCode: 200, body: '{"session":"session.value"}' };
+      }
+      return { statusCode: 403, body: '{"error":"forbidden"}' };
+    }
+  };
+  global.evaluateJavascriptViaWebview = async () => JSON.stringify({
+    ok: true,
+    images: ["https://img.example/page-1.jpg"]
+  });
+
+  try {
+    const pages = await extension.getPageList("/webtoon/850546/nv-850546-7");
+    assert.equal(getCalls.length, 1);
+    assert.equal(pages[0].url, "https://img.example/page-1.jpg");
+  } finally {
+    global.evaluateJavascriptViaWebview = previousEvaluate;
+  }
 });
 
 test("does not bypass ad verification and captures the image fetch", async () => {
@@ -614,7 +660,7 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.3.10", "0.3.6", "0.3.7"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.3.11", "0.3.6", "0.3.7"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["source=webtoon", "source=manga", "source=novel"]);
   for (const source of index) {
     assert.equal(source.baseUrl, "https://toki30.com");
