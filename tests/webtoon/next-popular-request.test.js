@@ -19,7 +19,12 @@ test("defaults the rebuild source to the Next family", () => {
   const { extension, sources } = loadWebtoonSource();
 
   assert.equal(sources[0].baseUrl, "https://sbxh9.com");
-  assert.equal(sources[0].version, "0.101");
+  assert.equal(sources[0].version, "0.102");
+  assert.match(sources[0].notes, /Popular.*Latest.*title search/i);
+  assert.match(
+    sources[0].notes,
+    /filters.*detail.*reader.*not implemented/i,
+  );
   assert.equal(extension.getParserFamily(), "next");
   assert.equal(extension.getNextBaseUrl(), "https://sbxh9.com");
 });
