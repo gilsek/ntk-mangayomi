@@ -148,6 +148,14 @@ class DefaultExtension extends MProvider {
     return `${this.getNextBaseUrl()}/ing?page=${encodeURIComponent(String(page))}`;
   }
 
+  buildNextSearchUrl(query) {
+    const parameters = [];
+    this.appendParameter(parameters, "q", query.trim());
+    this.appendParameter(parameters, "field", "title");
+    this.appendParameter(parameters, "match", "contains");
+    return `${this.getNextBaseUrl()}/search?${parameters.join("&")}`;
+  }
+
   parseNextRankCard(element, titleSelector, requestUrl) {
     const name = (element.selectFirst(titleSelector).text || "").trim();
     if (!name) {
@@ -316,6 +324,69 @@ class DefaultExtension extends MProvider {
     return this.parseNextLatestResponse(response, requestUrl);
   }
 
+  parseNextSearchCard(element, requestUrl) {
+    const name = (element.selectFirst("p.subject").text || "").trim();
+    if (!name) {
+      throw new Error(
+        `Next Webtoon search structure error parserFamily=next url=${requestUrl} missing=p.subject`,
+      );
+    }
+
+    const link = element.getHref || element.attr("href") || "";
+    const cover = element.selectFirst(".thumb img:not(.platform-icon)");
+    const image = cover.getSrc || cover.attr("src") || "";
+
+    return {
+      name,
+      link,
+      imageUrl: this.toAbsoluteUrl(image),
+    };
+  }
+
+  parseNextSearchResponse(response, requestUrl) {
+    if (response.statusCode < 200 || response.statusCode >= 400) {
+      throw new Error(
+        `Next Webtoon HTTP ${response.statusCode} parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    const contentType =
+      response.headers?.["content-type"] ||
+      response.headers?.["Content-Type"] ||
+      "";
+    if (contentType && !contentType.toLowerCase().includes("text/html")) {
+      throw new Error(
+        `Next Webtoon non-HTML response parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    const document = new Document(response.body);
+    if (document.select(".ep-empty").length > 0) {
+      return { list: [], hasNextPage: false };
+    }
+    if (document.select("div.search-results-grid").length === 0) {
+      throw new Error(
+        `Next Webtoon search structure error parserFamily=next url=${requestUrl} missing=div.search-results-grid,.ep-empty`,
+      );
+    }
+
+    const cards = document.select(
+      'div.search-results-grid > a.card[href^="/webtoon/"]',
+    );
+    return {
+      list: cards.map((element) =>
+        this.parseNextSearchCard(element, requestUrl),
+      ),
+      hasNextPage: false,
+    };
+  }
+
+  async fetchNextSearch(query) {
+    const requestUrl = this.buildNextSearchUrl(query);
+    const response = await new Client().get(requestUrl, this.getHeaders());
+    return this.parseNextSearchResponse(response, requestUrl);
+  }
+
   parseLegacyListItem(element, requestUrl) {
     const titleElement = element.selectFirst("span.title.white");
     const name = (titleElement.text || "").trim();
@@ -423,7 +494,11 @@ class DefaultExtension extends MProvider {
 
   async search(query, page, filters) {
     if (this.getParserFamily() === "next") {
-      throw new Error("Next Webtoon search is not implemented");
+      const normalizedQuery = query.trim();
+      if (!normalizedQuery || page > 1) {
+        return { list: [], hasNextPage: false };
+      }
+      return this.fetchNextSearch(normalizedQuery);
     }
     const normalizedQuery = query.trim();
     if (normalizedQuery.length === 1) {

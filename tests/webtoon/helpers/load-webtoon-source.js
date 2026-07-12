@@ -112,6 +112,24 @@ function matchingElements(html, selector) {
         results.push(element);
       }
     }
+  } else if (
+    selector ===
+    'div.search-results-grid > a.card[href^="/webtoon/"]'
+  ) {
+    const container = elementInnerHtmlByClass(
+      html,
+      "div",
+      "search-results-grid",
+    );
+    if (!container) return results;
+    for (const element of directChildAnchors(container)) {
+      if (
+        hasClass(element.openTag, "card") &&
+        element.attr("href").startsWith("/webtoon/")
+      ) {
+        results.push(element);
+      }
+    }
   } else if (selector === "p.subject") {
     for (const match of html.matchAll(/(<p\b[^>]*>)([\s\S]*?)<\/p>/gi)) {
       if (hasClass(match[1], "subject")) {
@@ -251,6 +269,12 @@ class TestDocument {
   }
 
   select(selector) {
+    if (selector === "div.search-results-grid") {
+      return Array.from(this.html.matchAll(/<div\b[^>]*>/gi))
+        .filter((match) => hasClass(match[0], "search-results-grid"))
+        .map((match) => new TestElement(match[0], match[0]));
+    }
+
     if (selector === "div.card-grid") {
       return Array.from(this.html.matchAll(/<div\b[^>]*>/gi))
         .filter((match) => hasClass(match[0], "card-grid"))
