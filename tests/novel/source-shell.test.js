@@ -13,15 +13,15 @@ test("exposes the frozen Legacy NTK Novel metadata", () => {
   assert.equal(sources[0].id, 260713003);
   assert.equal(sources[0].name, "NTK Novel");
   assert.equal(sources[0].baseUrl, "https://newtoki1.org");
-  assert.equal(sources[0].version, "0.301");
+  assert.equal(sources[0].version, "0.302");
   assert.equal(sources[0].itemType, 2);
   assert.equal(sources[0].isManga, false);
   assert.equal(sources[0].isNsfw, true);
   assert.equal(sources[0].additionalParams, "");
   assert.equal(sources[0].pkgPath, "novel/src/ko/ntk_novel.js");
   assert.match(sources[0].sourceCodeUrl, /\/ntk_novel\.js$/);
-  assert.match(sources[0].notes, /Popular.*Latest/i);
-  assert.match(sources[0].notes, /not implemented/i);
+  assert.match(sources[0].notes, /Popular.*Latest.*title search.*filters/i);
+  assert.match(sources[0].notes, /Detail.*chapters.*reader.*not implemented/i);
 });
 
 test("builds the Legacy host from a numeric preference", () => {
