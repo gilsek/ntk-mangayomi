@@ -64,6 +64,43 @@ test("keeps a ranked work that has no cover image", async () => {
   ]);
 });
 
+test("never uses the platform logo as a Popular cover", async () => {
+  const { extension } = loadWebtoonSource({
+    body: `
+      <main class="rank-v2-page">
+        <a class="rank-v2-row" href="/webtoon/18485">
+          <div class="rank-v2-cover">
+            <img class="rank-v2-platform" src="/platforms/toptoon.png" alt="">
+            <img src="/covers/18485.png" alt="Building Concepts">
+          </div>
+          <div class="rank-v2-row-title"><strong>Building Concepts</strong></div>
+        </a>
+        <a class="rank-v2-row" href="/webtoon/platform-only">
+          <div class="rank-v2-cover">
+            <img class="rank-v2-platform" src="/platforms/toptoon.png" alt="">
+          </div>
+          <div class="rank-v2-row-title"><strong>Platform Only</strong></div>
+        </a>
+      </main>
+    `,
+  });
+
+  const result = plain(await extension.getPopular(1));
+
+  assert.deepEqual(result.list, [
+    {
+      name: "Building Concepts",
+      link: "/webtoon/18485",
+      imageUrl: "https://sbxh9.com/covers/18485.png",
+    },
+    {
+      name: "Platform Only",
+      link: "/webtoon/platform-only",
+      imageUrl: "",
+    },
+  ]);
+});
+
 test("rejects a Next ranking page without its page marker", async () => {
   const { extension } = loadWebtoonSource({
     body: '<a class="rank-v2-row" href="/webtoon/1"><div class="rank-v2-row-title"><strong>작품</strong></div></a>',

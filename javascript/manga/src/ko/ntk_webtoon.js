@@ -14,7 +14,7 @@ const mangayomiSources = [
     sourceCodeUrl:
       "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_webtoon.js",
     apiUrl: "",
-    version: "0.104",
+    version: "0.105",
     isManga: true,
     itemType: 0,
     isFullData: false,
@@ -22,7 +22,7 @@ const mangayomiSources = [
     additionalParams: "",
     sourceCodeLanguage: 1,
     notes:
-      "Next Popular, Latest, title search, and filters preview with API covers; detail and reader are not implemented.",
+      "Next Popular, Latest, title search, and filters preview with platform-safe covers; detail and reader are not implemented.",
     pkgPath: "manga/src/ko/ntk_webtoon.js",
   },
 ];
@@ -349,8 +349,15 @@ class DefaultExtension extends MProvider {
       );
     }
 
-    const cover = element.selectFirst(".rank-v2-cover img");
-    const image = cover.getSrc || cover.attr("src") || "";
+    let image = "";
+    for (const candidate of element.select(".rank-v2-cover img")) {
+      const classes = (candidate.attr("class") || "")
+        .split(/\s+/)
+        .filter(Boolean);
+      if (classes.includes("rank-v2-platform")) continue;
+      image = candidate.getSrc || candidate.attr("src") || "";
+      if (image) break;
+    }
 
     return {
       name,
