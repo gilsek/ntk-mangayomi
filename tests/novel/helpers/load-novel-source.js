@@ -40,6 +40,7 @@ function loadNovelSource({
   responses,
   DocumentClass = EmptyDocument,
   SetClass = Set,
+  cryptoValue,
 } = {}) {
   assert.ok(fs.existsSync(sourcePath), "ntk_novel.js must exist");
   const requests = [];
@@ -60,6 +61,22 @@ function loadNovelSource({
         statusCode: 200,
       };
     }
+
+    async post(url, headers = {}, body = {}) {
+      const request = { method: "POST", url, headers, body };
+      requests.push(request);
+      const index = requests.length - 1;
+
+      if (typeof responses === "function") {
+        return responses(url, headers, index, request);
+      }
+      if (Array.isArray(responses)) return responses[index];
+      return {
+        body: "{}",
+        headers: { "content-type": "application/json" },
+        statusCode: 200,
+      };
+    }
   }
 
   class TestPreferences {
@@ -77,6 +94,7 @@ function loadNovelSource({
 
   context = vm.createContext({
     Client: TestClient,
+    crypto: cryptoValue,
     Document: DocumentClass,
     MProvider: TestProvider,
     Set: SetClass,

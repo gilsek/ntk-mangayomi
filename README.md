@@ -52,10 +52,11 @@ It changes only the WebView result bridge; it does not modify NTK's page or
 security scripts. A standard 0.7.80 build discards those payloads and cannot
 complete this reader fallback.
 
-`NTK Novel` 0.304 is the independent Legacy rebuild. Popular shows all works
+`NTK Novel` 0.305 is the independent Legacy rebuild. Popular shows all works
 ordered by views, Latest shows ongoing works ordered by updates, and title
 search plus the observed Legacy Novel filters are available. Work details and
 complete chapter lists are loaded from one Legacy detail response. The chapter
-parser is qualified with generated 10,000-row lists and keeps linear
-duplicate checks. The text reader will be added in a later stage; the old
-combined-source Novel reader is not part of this release.
+parser is qualified with generated 10,000-row lists and keeps linear duplicate
+checks. The authenticated text reader keeps one cookie-aware request sequence,
+verifies AES-GCM tags in both WebCrypto and pure JavaScript environments, and
+sanitizes rendered text or HTML. It does not call unlock or purchase endpoints.

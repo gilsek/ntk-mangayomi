@@ -18,6 +18,8 @@ test("uses one Set membership check and insertion per large-list chapter", () =>
     }
   }
   const { helpers } = loadNovelSource({ SetClass: CountingSet });
+  operations.has = 0;
+  operations.add = 0;
 
   const chapters = helpers.parseChaptersHtml(
     largeHtml(),
