@@ -45,24 +45,24 @@
   },
   {
     "name": "NTK Novel",
-    "id": 240710003,
-    "baseUrl": "https://toki30.com",
+    "id": 260713003,
+    "baseUrl": "https://newtoki1.org",
     "lang": "ko",
     "typeSource": "single",
-    "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://toki30.com",
+    "iconUrl": "https://www.google.com/s2/favicons?sz=128&domain=https://newtoki1.org",
     "dateFormat": "yy.MM.dd",
     "dateFormatLocale": "ko",
-    "isNsfw": false,
+    "isNsfw": true,
     "hasCloudflare": false,
-    "sourceCodeUrl": "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk.js",
+    "sourceCodeUrl": "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/novel/src/ko/ntk_novel.js",
     "apiUrl": "",
-    "version": "0.3.7",
+    "version": "0.301",
     "isManga": false,
     "itemType": 2,
     "isFullData": false,
     "appMinVerReq": "0.5.0",
-    "additionalParams": "source=novel",
+    "additionalParams": "",
     "sourceCodeLanguage": 1,
-    "notes": "Ported from Tachiyomi NTK v1.4.3. Update sourceCodeUrl after publishing."
+    "notes": "Legacy Popular and Latest are implemented. Search, filters, detail, chapters, and reader are not implemented."
   }
 ]

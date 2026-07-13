@@ -113,12 +113,191 @@ const NOVEL_LIST_METHODS = {
     return true;
   },
 
-  async getPopular() {
-    return { list: [], hasNextPage: false };
+  responseHeader(response, name) {
+    const headers = response?.headers;
+    if (!headers) return "";
+    if (typeof headers.get === "function") {
+      return String(
+        headers.get(name) ?? headers.get(name.toLowerCase()) ?? "",
+      );
+    }
+    if (typeof headers.value === "function") {
+      return String(
+        headers.value(name) ?? headers.value(name.toLowerCase()) ?? "",
+      );
+    }
+    const expected = name.toLowerCase();
+    for (const key of Object.keys(headers)) {
+      if (key.toLowerCase() === expected) return String(headers[key] ?? "");
+    }
+    return "";
   },
 
-  async getLatestUpdates() {
-    return { list: [], hasNextPage: false };
+  assertPage(page) {
+    if (!Number.isInteger(page) || page < 1) {
+      throw new Error("NTK Novel invalid page");
+    }
+  },
+
+  assertHtmlResponse(response, feature) {
+    const status = Number(response?.statusCode ?? response?.status ?? 0);
+    if (status < 200 || status >= 300) {
+      throw new Error(`NTK Novel ${feature} HTTP failure status=${status}`);
+    }
+    const contentType = NOVEL_LIST_METHODS.responseHeader(
+      response,
+      "content-type",
+    ).toLowerCase();
+    if (!contentType.includes("text/html")) {
+      throw new Error(`NTK Novel ${feature} response is not HTML`);
+    }
+  },
+
+  buildListUrl(page, pub, sort) {
+    NOVEL_LIST_METHODS.assertPage(page);
+    return appendQuery(joinUrl(this.getLegacyBaseUrl(), "/novel"), {
+      kind: "novel",
+      page,
+      pub,
+      sod: "desc",
+      sst: sort,
+    });
+  },
+
+  parseQuery(href) {
+    const normalized = String(href ?? "").replace(/&amp;/g, "&");
+    if (!normalized.startsWith("/novel?")) return null;
+    const query = {};
+    try {
+      for (const pair of normalized
+        .slice(normalized.indexOf("?") + 1)
+        .split("&")) {
+        if (!pair) continue;
+        const separator = pair.indexOf("=");
+        const key = decodeURIComponent(
+          separator < 0 ? pair : pair.slice(0, separator),
+        );
+        const value = decodeURIComponent(
+          separator < 0 ? "" : pair.slice(separator + 1),
+        );
+        if (Object.prototype.hasOwnProperty.call(query, key)) return null;
+        query[key] = value;
+      }
+    } catch (_) {
+      return null;
+    }
+    return query;
+  },
+
+  hasNextPage(document, page, pub, sort) {
+    const nextPage = String(page + 1);
+    return document.select(".pagination-desktop a").some((anchor) => {
+      const href = anchor?.getHref || anchor?.attr("href") || "";
+      const query = NOVEL_LIST_METHODS.parseQuery(href);
+      return Boolean(
+        query &&
+          Object.keys(query).length === 5 &&
+          query.kind === "novel" &&
+          query.page === nextPage &&
+          query.pub === pub &&
+          query.sod === "desc" &&
+          query.sst === sort,
+      );
+    });
+  },
+
+  parseListPage(body, page, pub, sort, feature) {
+    const document = new Document(body);
+    const rows = document.select("#webtoon-list-all > li");
+    const empty = document.select(".list-wrap .wr-none").length > 0;
+    if (rows.length === 0) {
+      if (empty) return { list: [], hasNextPage: false };
+      throw new Error(`NTK Novel ${feature} structure is missing`);
+    }
+
+    const list = [];
+    const seen = new Set();
+    for (const row of rows) {
+      const titleElement = row.selectFirst("span.title.white");
+      const linkElement = row.selectFirst(".img-item > a");
+      const name = String(titleElement?.text ?? "").trim();
+      const rawLink = String(
+        linkElement?.getHref || linkElement?.attr("href") || "",
+      ).trim();
+      if (!name || !rawLink) {
+        throw new Error(`NTK Novel malformed ${feature} card`);
+      }
+
+      let link;
+      try {
+        link = this.normalizeWorkLink(rawLink);
+      } catch (_) {
+        throw new Error(`NTK Novel malformed ${feature} card`);
+      }
+      if (seen.has(link)) continue;
+      seen.add(link);
+
+      const cover = row.selectFirst("img.theme-thumb-img");
+      const rawCover = String(
+        cover?.getSrc || cover?.attr("src") || "",
+      ).trim();
+      list.push({
+        name,
+        link,
+        imageUrl: rawCover
+          ? absoluteUrl(this.getLegacyBaseUrl(), rawCover)
+          : "",
+      });
+    }
+
+    return {
+      list,
+      hasNextPage: NOVEL_LIST_METHODS.hasNextPage(
+        document,
+        page,
+        pub,
+        sort,
+      ),
+    };
+  },
+
+  async requestList(page, pub, sort, feature) {
+    const requestUrl = NOVEL_LIST_METHODS.buildListUrl.call(
+      this,
+      page,
+      pub,
+      sort,
+    );
+    const response = await this.client.get(requestUrl, this.getHeaders());
+    NOVEL_LIST_METHODS.assertHtmlResponse(response, feature);
+    return NOVEL_LIST_METHODS.parseListPage.call(
+      this,
+      response.body,
+      page,
+      pub,
+      sort,
+      feature,
+    );
+  },
+
+  async getPopular(page) {
+    return NOVEL_LIST_METHODS.requestList.call(
+      this,
+      page,
+      "all",
+      "as_view",
+      "Popular",
+    );
+  },
+
+  async getLatestUpdates(page) {
+    return NOVEL_LIST_METHODS.requestList.call(
+      this,
+      page,
+      "ongoing",
+      "as_update",
+      "Latest",
+    );
   },
 };
 // endregion NOVEL_LIST_METHODS

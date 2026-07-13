@@ -52,4 +52,7 @@ It changes only the WebView result bridge; it does not modify NTK's page or
 security scripts. A standard 0.7.80 build discards those payloads and cannot
 complete this reader fallback.
 
-`NTK Novel` loads and decrypts novel content in the Mangayomi reader. Its Base64URL and AES-GCM fallback code does not depend on Node or browser-only globals.
+`NTK Novel` 0.301 starts the independent Legacy rebuild. Popular shows all works
+ordered by views, while Latest shows ongoing works ordered by updates. Search,
+filters, work details, chapter lists, and the text reader will be added in later
+stages; the old combined-source Novel reader is not part of this release.
