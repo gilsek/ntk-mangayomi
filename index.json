@@ -12,14 +12,14 @@
     "hasCloudflare": false,
     "sourceCodeUrl": "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_webtoon.js",
     "apiUrl": "",
-    "version": "0.108",
+    "version": "0.109",
     "isManga": true,
     "itemType": 0,
     "isFullData": false,
     "appMinVerReq": "0.5.0",
     "additionalParams": "",
     "sourceCodeLanguage": 1,
-    "notes": "Next Popular, Latest, title search, filters, detail, full episode lists, and WebView-backed reader with platform-safe covers. Reader requires modified Mangayomi with the WebView payload-preservation patch."
+    "notes": "Next Popular, Latest, title search, filters, detail, full episode lists, and WebView-backed reader with an image API fast path and DOM fallback. Reader requires modified Mangayomi with the WebView payload-preservation patch."
   },
   {
     "name": "NTK Manhwa",

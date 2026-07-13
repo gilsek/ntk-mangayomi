@@ -34,6 +34,36 @@ test("opens the exact Next episode URL and preserves image order", async () => {
   ]);
 });
 
+test("reuses one header object for WebView and all reader pages", async () => {
+  let headerCalls = 0;
+  const webviewHeaders = [];
+  const { extension } = loadWebtoonSource({
+    webview: async (_url, headers) => {
+      webviewHeaders.push(headers);
+      return {
+        ok: true,
+        images: [
+          "https://cdn.example/001.jpg",
+          "https://cdn.example/002.jpg",
+          "https://cdn.example/003.jpg",
+        ],
+      };
+    },
+  });
+  extension.getHeaders = () => {
+    headerCalls += 1;
+    return { "X-Test-Header": "reader" };
+  };
+
+  const pages = await extension.getPageList(
+    "/webtoon/17970/u-mrezmrs1-hypr",
+  );
+
+  assert.equal(headerCalls, 1);
+  assert.equal(webviewHeaders[0], pages[0].headers);
+  assert.ok(pages.every((page) => page.headers === pages[0].headers));
+});
+
 function createImageNode(url) {
   return {
     currentSrc: url,
@@ -110,6 +140,177 @@ function runExtractor(extension, observations) {
 
   return { responses, intervals, cleared };
 }
+
+function installApiFastPath(extension, responseText) {
+  const responses = [];
+  const intervals = [];
+  const cleared = [];
+  const events = [];
+  const eventListeners = new Map();
+  const fetchCalls = [];
+  const readerPath = "/webtoon/17970/u-mrezmrs1-hypr";
+  const window = {
+    location: { pathname: readerPath },
+    setInterval(callback, milliseconds) {
+      intervals.push({ callback, milliseconds });
+      return 7;
+    },
+    clearInterval(timer) {
+      cleared.push(timer);
+    },
+    addEventListener(type, listener) {
+      const listeners = eventListeners.get(type) || [];
+      listeners.push(listener);
+      eventListeners.set(type, listeners);
+    },
+    dispatchEvent(event) {
+      events.push(event);
+      for (const listener of eventListeners.get(event.type) || []) {
+        listener(event);
+      }
+      return true;
+    },
+    async fetch(...args) {
+      fetchCalls.push(args);
+      return {
+        clone() {
+          return {
+            async text() {
+              return responseText;
+            },
+          };
+        },
+      };
+    },
+    flutter_inappwebview: {
+      callHandler(name, payload) {
+        responses.push({ name, payload: JSON.parse(payload) });
+      },
+    },
+  };
+
+  class CustomEvent {
+    constructor(type, options = {}) {
+      this.type = type;
+      this.detail = options.detail;
+    }
+  }
+
+  vm.runInNewContext(
+    extension.createNextReaderImageExtractorScript(readerPath),
+    {
+      window,
+      CustomEvent,
+      document: {
+        querySelector() {
+          return null;
+        },
+      },
+    },
+  );
+
+  return {
+    window,
+    readerPath,
+    responses,
+    intervals,
+    cleared,
+    events,
+    fetchCalls,
+  };
+}
+
+test("extractor returns image API URLs before the reader DOM is ready", async () => {
+  const { extension } = loadWebtoonSource();
+  const execution = installApiFastPath(extension, JSON.stringify({
+    images: [
+      { page: 1, src: "https://cdn.example/001.webp" },
+      { page: 2, src: "https://cdn.example/002.webp" },
+      { page: 3, src: "https://cdn.example/001.webp" },
+      "https://cdn.example/003.webp",
+      { page: 4, src: "javascript:invalid" },
+    ],
+  }));
+
+  assert.equal(
+    execution.window.__ntk_ad_ack_scope,
+    execution.readerPath,
+  );
+  assert.deepEqual(
+    execution.events.map((event) => ({
+      type: event.type,
+      scope: event.detail?.scope,
+    })),
+    [{ type: "ntk-ad-ack-ready", scope: execution.readerPath }],
+  );
+  assert.equal(execution.responses.length, 0);
+  assert.equal(execution.intervals.length, 1);
+
+  await execution.window.fetch("/api/webtoon-images", { method: "POST" });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(execution.responses, [{
+    name: "setResponse",
+    payload: {
+      ok: true,
+      images: [
+        "https://cdn.example/001.webp",
+        "https://cdn.example/002.webp",
+        "https://cdn.example/003.webp",
+      ],
+    },
+  }]);
+  assert.deepEqual(execution.cleared, [7]);
+});
+
+test("extractor leaves DOM fallback active for unrelated or invalid API data", async () => {
+  const { extension } = loadWebtoonSource();
+  const execution = installApiFastPath(extension, "not-json");
+
+  await execution.window.fetch("/api/works");
+  await execution.window.fetch("/api/webtoon-images", { method: "POST" });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(execution.responses.length, 0);
+  assert.equal(execution.intervals.length, 1);
+  assert.deepEqual(execution.cleared, []);
+});
+
+test("extractor re-announces ad acknowledgement when the image API requests it", async () => {
+  const { extension } = loadWebtoonSource();
+  const execution = installApiFastPath(extension, JSON.stringify({
+    error: "ad_ack_required",
+  }));
+
+  await execution.window.fetch("/api/webtoon-images", { method: "POST" });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(execution.responses.length, 0);
+  assert.deepEqual(
+    execution.events.map((event) => event.type),
+    ["ntk-ad-ack-ready", "ntk-ad-ack-ready"],
+  );
+});
+
+test("extractor handles the reader ad acknowledgement rearm event", () => {
+  const { extension } = loadWebtoonSource();
+  const execution = installApiFastPath(extension, "{}");
+
+  execution.window.__ntk_ad_ack_scope = "";
+  execution.window.dispatchEvent({
+    type: "ntk-ack-rearm",
+    detail: { scope: execution.readerPath },
+  });
+
+  assert.equal(
+    execution.window.__ntk_ad_ack_scope,
+    execution.readerPath,
+  );
+  assert.deepEqual(
+    execution.events.map((event) => event.type),
+    ["ntk-ad-ack-ready", "ntk-ack-rearm", "ntk-ad-ack-ready"],
+  );
+});
 
 test("extractor waits until every viewer container child is an image", () => {
   const { extension } = loadWebtoonSource();

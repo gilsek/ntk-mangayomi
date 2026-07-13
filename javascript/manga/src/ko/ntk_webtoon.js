@@ -14,7 +14,7 @@ const mangayomiSources = [
     sourceCodeUrl:
       "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_webtoon.js",
     apiUrl: "",
-    version: "0.108",
+    version: "0.109",
     isManga: true,
     itemType: 0,
     isFullData: false,
@@ -22,7 +22,7 @@ const mangayomiSources = [
     additionalParams: "",
     sourceCodeLanguage: 1,
     notes:
-      "Next Popular, Latest, title search, filters, detail, full episode lists, and WebView-backed reader with platform-safe covers. Reader requires modified Mangayomi with the WebView payload-preservation patch.",
+      "Next Popular, Latest, title search, filters, detail, full episode lists, and WebView-backed reader with an image API fast path and DOM fallback. Reader requires modified Mangayomi with the WebView payload-preservation patch.",
     pkgPath: "manga/src/ko/ntk_webtoon.js",
   },
 ];
@@ -650,6 +650,76 @@ class DefaultExtension extends MProvider {
     return;
   }
 
+  function signalAdAck() {
+    window.__ntk_ad_ack_scope = expectedPath;
+    try {
+      window.dispatchEvent(
+        new CustomEvent("ntk-ad-ack-ready", {
+          detail: { scope: expectedPath },
+        }),
+      );
+    } catch (_) {}
+  }
+
+  function apiImages(payload) {
+    if (!payload || !Array.isArray(payload.images)) return [];
+    var seen = {};
+    var images = [];
+    for (var i = 0; i < payload.images.length; i += 1) {
+      var image = payload.images[i];
+      var url = typeof image === "string" ? image : image && image.src;
+      if (typeof url !== "string" || !/^https?:\\/\\//i.test(url)) continue;
+      if (seen[url]) continue;
+      seen[url] = true;
+      images.push(url);
+    }
+    return images;
+  }
+
+  function installImageApiInterceptor() {
+    if (typeof window.fetch !== "function") return;
+    var originalFetch = window.fetch;
+    window.fetch = function () {
+      var fetchArguments = arguments;
+      return originalFetch.apply(this, fetchArguments).then(function (response) {
+        var input = fetchArguments[0];
+        var url = input && input.url ? input.url : String(input || "");
+        if (!/\\/api\\/(?:manga|manhwa|webtoon)-images(?:[?#]|$)/i.test(url)) {
+          return response;
+        }
+        try {
+          response.clone().text().then(function (text) {
+            if (finished) return;
+            try {
+              var payload = JSON.parse(text);
+              if (
+                payload &&
+                (payload.error === "ad_ack_required" ||
+                  payload.error === "fingerprint_required")
+              ) {
+                signalAdAck();
+                return;
+              }
+              var images = apiImages(payload);
+              if (images.length) respond({ ok: true, images: images });
+            } catch (_) {}
+          }).catch(function () {});
+        } catch (_) {}
+        return response;
+      });
+    };
+  }
+
+  if (typeof window.addEventListener === "function") {
+    window.addEventListener("ntk-ack-rearm", function (event) {
+      if (event && event.detail && event.detail.scope === expectedPath) {
+        signalAdAck();
+      }
+    });
+  }
+  signalAdAck();
+  installImageApiInterceptor();
+
   function collect() {
     var container = document.querySelector(".vw-imgs");
     if (!container || !container.children.length) return false;
@@ -1031,11 +1101,12 @@ class DefaultExtension extends MProvider {
       );
     }
 
+    const headers = this.getHeaders();
     let payload;
     try {
       payload = await evaluateJavascriptViaWebview(
         `${this.getNextBaseUrl()}${readerPath}`,
-        this.getHeaders(),
+        headers,
         [this.createNextReaderImageExtractorScript(readerPath)],
       );
     } catch (_) {
@@ -1044,7 +1115,7 @@ class DefaultExtension extends MProvider {
       );
     }
     return this.parseNextWebviewImageResponse(payload, readerPath).map(
-      (image) => ({ url: image, headers: this.getHeaders() }),
+      (image) => ({ url: image, headers }),
     );
   }
 
