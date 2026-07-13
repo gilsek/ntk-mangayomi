@@ -14,7 +14,7 @@ const mangayomiSources = [
     sourceCodeUrl:
       "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/novel/src/ko/ntk_novel.js",
     apiUrl: "",
-    version: "0.302",
+    version: "0.303",
     isManga: false,
     itemType: 2,
     isFullData: false,
@@ -22,7 +22,7 @@ const mangayomiSources = [
     additionalParams: "",
     sourceCodeLanguage: 1,
     notes:
-      "Legacy Popular, Latest, title search, and filters are implemented. Detail, chapters, and reader are not implemented.",
+      "Legacy Popular, Latest, title search, filters, detail, and complete chapter lists are implemented. Reader is not implemented.",
     pkgPath: "novel/src/ko/ntk_novel.js",
   },
 ];
@@ -59,6 +59,194 @@ function absoluteUrl(baseUrl, value) {
   if (/^https?:\/\//i.test(value)) return value;
   if (value.startsWith("//")) return `https:${value}`;
   return joinUrl(baseUrl, value);
+}
+
+function pathFromUrl(value) {
+  const text = String(value || "");
+  const match = text.match(/^https?:\/\/[^/]+(\/[^?#]*)/i);
+  if (match) return match[1];
+  const noHash = text.split("#")[0];
+  const noQuery = noHash.split("?")[0];
+  return noQuery || "/";
+}
+
+function htmlDecode(value) {
+  return String(value || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function stripTags(value) {
+  return htmlDecode(
+    String(value || "")
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/<[^>]*>/g, ""),
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function attrValue(tag, attr) {
+  const escaped = attr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = String(tag || "").match(
+    new RegExp(`${escaped}\\s*=\\s*[\"']([^\"']+)[\"']`, "i"),
+  );
+  return match ? htmlDecode(match[1]) : "";
+}
+
+function firstMatch(html, regex) {
+  const match = String(html || "").match(regex);
+  return match ? match[1] : "";
+}
+
+function allMatches(html, regex) {
+  const results = [];
+  let match;
+  const pattern = new RegExp(
+    regex.source,
+    regex.flags.includes("g") ? regex.flags : `${regex.flags}g`,
+  );
+  while ((match = pattern.exec(String(html || ""))) !== null) {
+    results.push(match[1]);
+  }
+  return results;
+}
+
+function parseStatus(text) {
+  if (/연재|ongoing/i.test(String(text || ""))) return 0;
+  if (/완결|complete/i.test(String(text || ""))) return 1;
+  return 5;
+}
+
+function toEpochMillis(text) {
+  const value = String(text || "").trim();
+  const match = value.match(/^(\d{2}|\d{4})\.(\d{1,2})\.(\d{1,2})$/);
+  if (!match) return null;
+  const year = match[1].length === 2 ? 2000 + Number(match[1]) : Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  return String(new Date(year, month, day).valueOf());
+}
+
+function parseDetailsHtml(html, baseUrl) {
+  const metaTitle = htmlDecode(
+    attrValue(
+      firstMatch(html, /(<meta[^>]*property=["']og:title["'][^>]*>)/i),
+      "content",
+    ),
+  ).replace(/\s+-\s+뉴토끼[\s\S]*$/i, "");
+  const metaDescription = htmlDecode(
+    attrValue(
+      firstMatch(
+        html,
+        /(<meta[^>]*(?:property=["']og:description["']|name=["']description["'])[^>]*>)/i,
+      ),
+      "content",
+    ),
+  );
+  const metaImage = attrValue(
+    firstMatch(html, /(<meta[^>]*property=["']og:image["'][^>]*>)/i),
+    "content",
+  );
+  const title =
+    stripTags(
+      firstMatch(
+        html,
+        /<h1[^>]*class=["'][^"']*hero-v2-title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i,
+      ),
+    ) ||
+    stripTags(
+      firstMatch(
+        html,
+        /<div[^>]*class=["'][^"']*theme-detail-title-line[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+      ),
+    ) ||
+    metaTitle;
+  const author =
+    stripTags(
+      firstMatch(
+        html,
+        /<div[^>]*class=["'][^"']*hero-v2-author[^"']*["'][^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/i,
+      ),
+    ) ||
+    stripTags(
+      firstMatch(
+        html,
+        /<span[^>]*class=["'][^"']*theme-detail-info-label[^"']*["'][^>]*>\s*작가\s*<\/span>\s*<span[^>]*class=["'][^"']*theme-detail-info-value[^"']*["'][^>]*>([\s\S]*?)<\/span>/i,
+      ),
+    );
+  const description =
+    stripTags(
+      firstMatch(
+        html,
+        /<p[^>]*class=["'][^"']*hero-v2-desc[^"']*["'][^>]*>([\s\S]*?)<\/p>/i,
+      ),
+    ) ||
+    stripTags(
+      firstMatch(
+        html,
+        /<div[^>]*class=["'][^"']*theme-detail-description[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+      ),
+    ) ||
+    metaDescription;
+  const thumbTag = firstMatch(
+    html,
+    /<div[^>]*class=["'][^"']*hero-v2-thumb[^"']*["'][^>]*>[\s\S]*?(<img[^>]*>)/i,
+  );
+  const legacyThumbTag = firstMatch(
+    html,
+    /<div[^>]*class=["'][^"']*view-img[^"']*["'][^>]*>[\s\S]*?(<img[^>]*>)/i,
+  );
+  const thumbnailUrl = absoluteUrl(
+    baseUrl,
+    attrValue(thumbTag, "src") ||
+      attrValue(thumbTag, "data-src") ||
+      attrValue(legacyThumbTag, "src") ||
+      attrValue(legacyThumbTag, "data-src") ||
+      metaImage,
+  );
+  const statusText =
+    stripTags(
+      firstMatch(
+        html,
+        /<span[^>]*class=["'][^"']*pill-status[^"']*["'][^>]*>([\s\S]*?)<\/span>/i,
+      ),
+    ) ||
+    stripTags(
+      firstMatch(
+        html,
+        /<span[^>]*class=["'][^"']*theme-detail-info-label[^"']*["'][^>]*>\s*발행구분\s*<\/span>\s*<span[^>]*class=["'][^"']*theme-detail-info-value[^"']*["'][^>]*>([\s\S]*?)<\/span>/i,
+      ),
+    );
+  const genres = allMatches(
+    html,
+    /<a[^>]*class=["'][^"']*hero-v2-tag[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi,
+  )
+    .map(stripTags)
+    .filter(Boolean);
+  if (genres.length === 0) {
+    const legacyGenre = stripTags(
+      firstMatch(
+        html,
+        /<span[^>]*class=["'][^"']*theme-detail-info-label[^"']*["'][^>]*>\s*장르\s*<\/span>\s*<span[^>]*class=["'][^"']*theme-detail-info-value[^"']*["'][^>]*>([\s\S]*?)<\/span>/i,
+      ),
+    );
+    if (legacyGenre) {
+      genres.push(...legacyGenre.split(/\s*,\s*/).filter(Boolean));
+    }
+  }
+
+  return {
+    title,
+    author,
+    description,
+    thumbnailUrl,
+    status: parseStatus(statusText),
+    genre: genres,
+  };
 }
 
 function filterOption(name, value) {
@@ -167,6 +355,163 @@ function normalizeNovelWorkLink(value, baseUrl) {
   const match = path.match(/^\/novel\/(\d+)$/);
   if (!match) invalid();
   return `/novel/${match[1]}`;
+}
+
+function normalizeNovelEpisodeLink(value, baseUrl, expectedWorkId) {
+  const candidate = typeof value === "string" ? value.trim() : "";
+  const invalid = (reason) => {
+    throw new Error(`NTK Novel chapter structure error: ${reason}`);
+  };
+
+  if (
+    !candidate ||
+    candidate.includes("?") ||
+    candidate.includes("#") ||
+    candidate.includes("\\") ||
+    /%(?:2e|2f|5c)/i.test(candidate)
+  ) {
+    invalid("link");
+  }
+
+  const absolute = candidate.match(/^https:\/\/([^/?#]+)(\/[^?#]*)$/i);
+  if (
+    !absolute &&
+    (/^[a-z][a-z0-9+.-]*:/i.test(candidate) ||
+      candidate.startsWith("//") ||
+      !candidate.startsWith("/"))
+  ) {
+    invalid("link");
+  }
+
+  const baseAuthority = String(baseUrl)
+    .replace(/^https:\/\//i, "")
+    .replace(/\/+$/, "")
+    .replace(/:443$/i, "")
+    .toLowerCase();
+  if (
+    absolute &&
+    absolute[1].replace(/:443$/i, "").toLowerCase() !== baseAuthority
+  ) {
+    invalid("ownership");
+  }
+
+  const path = absolute ? absolute[2] : candidate;
+  const match = path.match(/^\/novel\/(\d+)\/(\d+)$/);
+  if (!match) invalid("link");
+  if (match[1] !== String(expectedWorkId)) invalid("ownership");
+  return `/novel/${match[1]}/${match[2]}`;
+}
+
+function isValidNovelDate(value) {
+  const match = String(value || "")
+    .trim()
+    .match(/^(\d{2}|\d{4})\.(\d{1,2})\.(\d{1,2})$/);
+  if (!match) return false;
+  const year = match[1].length === 2 ? 2000 + Number(match[1]) : Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
+function parseChaptersHtml(html, baseUrl, expectedWorkId) {
+  const form = firstMatch(
+    html,
+    /<form[^>]*id=["']serial-move["'][^>]*>([\s\S]*?)<\/form>/i,
+  );
+  if (!form) {
+    throw new Error("NTK Novel chapter structure error: missing=serial-move");
+  }
+  const listBody = firstMatch(
+    form,
+    /<ul[^>]*class=["'][^"']*\blist-body\b[^"']*["'][^>]*>([\s\S]*?)<\/ul>/i,
+  );
+  if (!listBody) {
+    throw new Error("NTK Novel chapter structure error: missing=list-body");
+  }
+
+  const rows = allMatches(
+    listBody,
+    /<li[^>]*class=["'][^"']*\blist-item\b[^"']*["'][^>]*>([\s\S]*?)<\/li>/gi,
+  );
+  if (rows.length === 0) {
+    throw new Error("NTK Novel chapter structure error: missing=rows");
+  }
+
+  const chapters = [];
+  const seen = new Set();
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    const rowNumber = index + 1;
+    const linkTag = firstMatch(
+      row,
+      /(<a[^>]*class=["'][^"']*\bitem-subject\b[^"']*["'][^>]*>)/i,
+    );
+    const href = attrValue(linkTag, "href");
+    if (!href) {
+      throw new Error(
+        `NTK Novel chapter structure error: row=${rowNumber} missing=link`,
+      );
+    }
+
+    let url;
+    try {
+      url = normalizeNovelEpisodeLink(href, baseUrl, expectedWorkId);
+    } catch (error) {
+      const reason = /ownership/i.test(String(error?.message))
+        ? "ownership"
+        : "link";
+      throw new Error(
+        `NTK Novel chapter structure error: row=${rowNumber} invalid=${reason}`,
+      );
+    }
+    if (seen.has(url)) {
+      throw new Error(
+        `NTK Novel chapter structure error: row=${rowNumber} duplicate=link`,
+      );
+    }
+    seen.add(url);
+
+    const titleHtml = firstMatch(
+      row,
+      /<a[^>]*class=["'][^"']*\bitem-subject\b[^"']*["'][^>]*>([\s\S]*?)<\/a>/i,
+    ).replace(
+      /<span[^>]*class=["'][^"']*theme-episode-title-metrics[^"']*["'][^>]*>[\s\S]*$/i,
+      "",
+    );
+    const name = stripTags(titleHtml);
+    if (!name) {
+      throw new Error(
+        `NTK Novel chapter structure error: row=${rowNumber} missing=title`,
+      );
+    }
+
+    const rawDate = stripTags(
+      firstMatch(
+        row,
+        /<div[^>]*class=["'][^"']*\bwr-date\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+      ),
+    );
+    if (!isValidNovelDate(rawDate)) {
+      throw new Error(
+        `NTK Novel chapter structure error: row=${rowNumber} invalid=date`,
+      );
+    }
+
+    const locked = /class=["'][^"']*ep-price-badge/i.test(row);
+    chapters.push({
+      name: locked ? `${name} 🔒` : name,
+      url,
+      link: absoluteUrl(baseUrl, url),
+      dateUpload: toEpochMillis(rawDate),
+      scanlator: locked ? "🔒" : "",
+    });
+  }
+  return chapters;
 }
 
 // region NOVEL_LIST_METHODS
@@ -480,6 +825,42 @@ const NOVEL_SEARCH_FILTER_METHODS = {
 };
 // endregion NOVEL_SEARCH_FILTER_METHODS
 
+// region NOVEL_DETAIL_METHODS
+const NOVEL_DETAIL_METHODS = {
+  async getDetail(value) {
+    const link = this.normalizeWorkLink(value);
+    const workId = link.match(/^\/novel\/(\d+)$/)[1];
+    const response = await this.client.get(
+      joinUrl(this.getLegacyBaseUrl(), link),
+      this.getHeaders(),
+    );
+    NOVEL_LIST_METHODS.assertHtmlResponse(response, "Detail");
+
+    const details = parseDetailsHtml(response.body, this.getLegacyBaseUrl());
+    if (!details.title) {
+      throw new Error("NTK Novel detail structure error: missing=title");
+    }
+    const chapters = parseChaptersHtml(
+      response.body,
+      this.getLegacyBaseUrl(),
+      workId,
+    );
+
+    return {
+      name: details.title,
+      link,
+      imageUrl: details.thumbnailUrl,
+      description: details.description,
+      author: details.author,
+      artist: details.author,
+      status: details.status,
+      genre: details.genre,
+      chapters,
+    };
+  },
+};
+// endregion NOVEL_DETAIL_METHODS
+
 class DefaultExtension extends MProvider {
   constructor() {
     super();
@@ -533,6 +914,10 @@ class DefaultExtension extends MProvider {
     return NOVEL_SEARCH_FILTER_METHODS.getFilterList.call(this);
   }
 
+  async getDetail(url) {
+    return NOVEL_DETAIL_METHODS.getDetail.call(this, url);
+  }
+
   getSourcePreferences() {
     return [
       {
@@ -551,12 +936,24 @@ class DefaultExtension extends MProvider {
 
 const NOVEL_TEST_EXPORTS = {
   absoluteUrl,
+  allMatches,
   appendQuery,
+  attrValue,
   filterOption,
   filterTextValue,
+  firstMatch,
+  htmlDecode,
+  isValidNovelDate,
   joinUrl,
+  normalizeNovelEpisodeLink,
   normalizeNovelWorkLink,
+  parseChaptersHtml,
+  parseDetailsHtml,
+  parseStatus,
+  pathFromUrl,
   selectFilter,
+  stripTags,
   textFilter,
+  toEpochMillis,
   trimSlash,
 };
