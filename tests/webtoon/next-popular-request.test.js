@@ -19,7 +19,7 @@ test("defaults the rebuild source to the Next family", () => {
   const { extension, sources } = loadWebtoonSource();
 
   assert.equal(sources[0].baseUrl, "https://sbxh9.com");
-  assert.equal(sources[0].version, "0.107");
+  assert.equal(sources[0].version, "0.108");
   assert.equal(sources[0].appMinVerReq, "0.5.0");
   assert.match(sources[0].notes, /Popular.*Latest.*title search.*filters/i);
   assert.match(sources[0].notes, /detail/i);

@@ -14,7 +14,7 @@ const mangayomiSources = [
     sourceCodeUrl:
       "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_webtoon.js",
     apiUrl: "",
-    version: "0.107",
+    version: "0.108",
     isManga: true,
     itemType: 0,
     isFullData: false,
@@ -678,7 +678,7 @@ class DefaultExtension extends MProvider {
   timer = window.setInterval(function () {
     attempts += 1;
     if (collect()) return;
-    var error = document.querySelector(".vw-empty, .novel-loading");
+    var error = document.querySelector(".vw-empty");
     if (error) {
       respond({ ok: false, error: (error.textContent || "reader error").trim() });
       return;

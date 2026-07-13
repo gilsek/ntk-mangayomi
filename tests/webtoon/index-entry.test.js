@@ -27,7 +27,7 @@ test("registers the rebuild Webtoon source for client list testing", () => {
   assert.equal(webtoon.isManga, true);
   assert.equal(webtoon.isNsfw, true);
   assert.equal(webtoon.hasCloudflare, false);
-  assert.equal(webtoon.version, "0.107");
+  assert.equal(webtoon.version, "0.108");
   assert.equal(webtoon.appMinVerReq, "0.5.0");
   assert.equal(
     path.posix.basename(new URL(webtoon.sourceCodeUrl).pathname),

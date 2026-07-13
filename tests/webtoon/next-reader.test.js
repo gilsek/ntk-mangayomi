@@ -93,6 +93,15 @@ function runExtractor(extension, observations) {
               },
             };
           }
+          if (
+            selector.includes(".novel-loading")
+            && activeObservation?.loading
+          ) {
+            return { textContent: "불러오는 중..." };
+          }
+          if (selector.includes(".vw-empty") && activeObservation?.empty) {
+            return { textContent: "reader error" };
+          }
           return null;
         },
       },
@@ -167,6 +176,28 @@ test("extractor waits for a container, matching child count, and valid URLs", ()
 
   assert.equal(execution.responses.length, 1);
   assert.deepEqual(execution.cleared, [7]);
+});
+
+test("extractor keeps waiting while the Next reader shows its loading state", () => {
+  const { extension } = loadWebtoonSource();
+  const images = [
+    "https://cdn.example/001.jpg",
+    "https://cdn.example/002.jpg",
+  ];
+  const execution = runExtractor(extension, [
+    { container: false, loading: true },
+    { container: false, loading: true },
+    { childCount: 2, urls: images },
+  ]);
+
+  execution.intervals[0].callback();
+  assert.equal(execution.responses.length, 0);
+
+  execution.intervals[0].callback();
+  assert.deepEqual(execution.responses, [{
+    name: "setResponse",
+    payload: { ok: true, images },
+  }]);
 });
 
 test("rejects malformed links and invalid WebView payloads", async () => {
