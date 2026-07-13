@@ -742,7 +742,11 @@ class DefaultExtension extends MProvider {
       }
 
       const episodeId = String(sourceEpisodeId).trim();
-      if (seen.has(episodeId)) continue;
+      if (seen.has(episodeId)) {
+        throw new Error(
+          `Next Webtoon episode structure error parserFamily=next url=${requestUrl} duplicate=sourceEpisodeId`,
+        );
+      }
       seen.add(episodeId);
 
       let name = typeof episode?.title === "string" ? episode.title.trim() : "";

@@ -150,6 +150,24 @@ test("rejects malformed detail links and incomplete episode payloads", async () 
   );
 });
 
+test("rejects duplicate source episode IDs instead of returning fewer chapters than total", async () => {
+  const { extension } = loadDetail({
+    episodePayload: {
+      ok: true,
+      total: 2,
+      episodes: [
+        { sourceEpisodeId: "duplicate", title: "2화", epNo: 2 },
+        { sourceEpisodeId: "duplicate", title: "1화", epNo: 1 },
+      ],
+    },
+  });
+
+  await assert.rejects(
+    () => extension.getDetail("/webtoon/work"),
+    /episode structure error.*duplicate=sourceEpisodeId/i,
+  );
+});
+
 test("does not convert detail HTTP or structure failures into empty details", async () => {
   const notFound = loadDetail({ detailStatus: 404 }).extension;
   const missingHero = loadDetail({ html: "<main>maintenance</main>" }).extension;
