@@ -638,8 +638,104 @@ const MANHWA_SEARCH_FILTER_METHODS = {
 
 // region MANHWA_DETAIL_EPISODE_METHODS
 const MANHWA_DETAIL_EPISODE_METHODS = {
-  async getDetail() {
-    throw new Error("NTK Manhwa detail and episode feature is not implemented");
+  uniqueTexts(elements, { stripHash = false } = {}) {
+    const values = [];
+    const seen = new Set();
+    for (const element of elements) {
+      let value = (element.text || "").trim();
+      if (stripHash) value = value.replace(/^#\s*/, "");
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      values.push(value);
+    }
+    return values;
+  },
+
+  parseDetailResponse(response, requestUrl, link) {
+    if (response.statusCode < 200 || response.statusCode >= 400) {
+      throw new Error(`Next Manhwa detail HTTP ${response.statusCode} url=${requestUrl}`);
+    }
+
+    const contentType =
+      response.headers?.["content-type"] ||
+      response.headers?.["Content-Type"] ||
+      "";
+    if (contentType && !contentType.toLowerCase().includes("text/html")) {
+      throw new Error(`Next Manhwa detail non-HTML response url=${requestUrl}`);
+    }
+
+    const document = new Document(response.body);
+    if (document.select("section.hero-v2").length === 0) {
+      throw new Error(
+        `Next Manhwa detail structure error url=${requestUrl} missing=section.hero-v2`,
+      );
+    }
+
+    const name = (document.selectFirst("h1.hero-v2-title").text || "").trim();
+    if (!name) {
+      throw new Error(
+        `Next Manhwa detail structure error url=${requestUrl} missing=h1.hero-v2-title`,
+      );
+    }
+
+    const cover = document.selectFirst(".hero-v2-thumb img");
+    const image = cover.getSrc || cover.attr("src") || cover.attr("data-src") || "";
+    let description = (
+      document.selectFirst("p.hero-v2-desc").text || ""
+    ).trim();
+    if (description === "등록된 작품 설명이 없습니다.") description = "";
+
+    const authors = MANHWA_DETAIL_EPISODE_METHODS.uniqueTexts(
+      document.select(".hero-v2-author a"),
+    );
+    const author = authors.join(", ");
+    const genre = MANHWA_DETAIL_EPISODE_METHODS.uniqueTexts(
+      document.select(".hero-v2-tags a.hero-v2-tag"),
+      { stripHash: true },
+    );
+
+    const statusElement = document.selectFirst("span.pill-status");
+    const statusText = (statusElement.text || "").trim();
+    const statusClasses = (statusElement.attr("class") || "")
+      .split(/\s+/)
+      .filter(Boolean);
+    let status = 5;
+    if (statusClasses.includes("completed") || statusText.includes("완결")) {
+      status = 1;
+    } else if (
+      statusClasses.includes("ongoing") ||
+      statusText.includes("연재")
+    ) {
+      status = 0;
+    }
+
+    return {
+      name,
+      link,
+      imageUrl: this.toAbsoluteUrl(image),
+      description,
+      author,
+      artist: author,
+      status,
+      genre,
+    };
+  },
+
+  parseEpisodeResponse() {
+    throw new Error("NTK Manhwa episode feature is not implemented");
+  },
+
+  async getDetail(url) {
+    const link = this.normalizeWorkLink(url);
+    const requestUrl = `${this.getNextBaseUrl()}${link}`;
+    const response = await this.client.get(requestUrl, this.getHeaders());
+    const detail = MANHWA_DETAIL_EPISODE_METHODS.parseDetailResponse.call(
+      this,
+      response,
+      requestUrl,
+      link,
+    );
+    return { ...detail, chapters: [] };
   },
 };
 // endregion MANHWA_DETAIL_EPISODE_METHODS
