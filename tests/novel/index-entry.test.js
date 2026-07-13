@@ -17,7 +17,7 @@ function assertPublishedNovelMetadata(novel) {
   assert.equal(novel.id, 260713003);
   assert.equal(novel.name, "NTK Novel");
   assert.equal(novel.baseUrl, "https://newtoki1.org");
-  assert.equal(novel.version, "0.303");
+  assert.equal(novel.version, "0.304");
   assert.equal(novel.itemType, 2);
   assert.equal(novel.isManga, false);
   assert.equal(novel.isNsfw, true);
@@ -26,7 +26,7 @@ function assertPublishedNovelMetadata(novel) {
     novel.sourceCodeUrl,
     "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/novel/src/ko/ntk_novel.js",
   );
-  assert.match(novel.notes, /Legacy Popular, Latest, title search, filters, detail, and complete chapter lists are implemented/i);
+  assert.match(novel.notes, /complete chapter lists are qualified for ten-thousand-row works/i);
   assert.match(novel.notes, /Reader.*not implemented/i);
 }
 

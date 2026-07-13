@@ -660,7 +660,7 @@ test("repository manifests are consistent", () => {
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(index.length, 3);
   assert.deepEqual(index.map((source) => source.name), ["NTK Webtoon", "NTK Manhwa", "NTK Novel"]);
-  assert.deepEqual(index.map((source) => source.version), ["0.109", "0.207", "0.303"]);
+  assert.deepEqual(index.map((source) => source.version), ["0.109", "0.207", "0.304"]);
   assert.deepEqual(index.map((source) => source.additionalParams), ["", "", ""]);
 
   const [webtoon, manhwa, novel] = index;

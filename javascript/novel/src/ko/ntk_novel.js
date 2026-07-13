@@ -14,7 +14,7 @@ const mangayomiSources = [
     sourceCodeUrl:
       "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/novel/src/ko/ntk_novel.js",
     apiUrl: "",
-    version: "0.303",
+    version: "0.304",
     isManga: false,
     itemType: 2,
     isFullData: false,
@@ -22,7 +22,7 @@ const mangayomiSources = [
     additionalParams: "",
     sourceCodeLanguage: 1,
     notes:
-      "Legacy Popular, Latest, title search, filters, detail, and complete chapter lists are implemented. Reader is not implemented.",
+      "Legacy Popular, Latest, title search, filters, detail, and complete chapter lists are implemented. Complete chapter lists are qualified for ten-thousand-row works. Reader is not implemented.",
     pkgPath: "novel/src/ko/ntk_novel.js",
   },
 ];

@@ -39,6 +39,7 @@ function loadNovelSource({
   preferences = {},
   responses,
   DocumentClass = EmptyDocument,
+  SetClass = Set,
 } = {}) {
   assert.ok(fs.existsSync(sourcePath), "ntk_novel.js must exist");
   const requests = [];
@@ -78,6 +79,7 @@ function loadNovelSource({
     Client: TestClient,
     Document: DocumentClass,
     MProvider: TestProvider,
+    Set: SetClass,
     SharedPreferences: TestPreferences,
     console,
   });
