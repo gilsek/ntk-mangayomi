@@ -604,6 +604,112 @@ class DefaultExtension extends MProvider {
     };
   }
 
+  normalizeNextReaderLink(url) {
+    const value = typeof url === "string" ? url.trim() : "";
+    const withoutOrigin = value.replace(/^https?:\/\/[^/]+/i, "");
+    const path = withoutOrigin.split(/[?#]/)[0];
+    const match = path.match(/^\/webtoon\/([^/]+)\/([^/]+)$/);
+    if (!match) {
+      throw new Error(
+        `Next Webtoon invalid reader link parserFamily=next url=${value}`,
+      );
+    }
+    return `/webtoon/${match[1]}/${match[2]}`;
+  }
+
+  createNextReaderImageExtractorScript(readerPath) {
+    return `(function () {
+  if (window.__ntkWebtoonReaderExtractor) return;
+  window.__ntkWebtoonReaderExtractor = true;
+  var finished = false;
+  var timer = null;
+
+  function respond(payload) {
+    if (finished) return;
+    finished = true;
+    if (timer) window.clearInterval(timer);
+    window.flutter_inappwebview.callHandler(
+      "setResponse",
+      JSON.stringify(payload),
+    );
+  }
+
+  function collect() {
+    var nodes = Array.prototype.slice.call(
+      document.querySelectorAll(".viewer-lazy-img"),
+    );
+    if (!nodes.length) return false;
+    var seen = {};
+    var images = [];
+    for (var i = 0; i < nodes.length; i += 1) {
+      var node = nodes[i];
+      var url = node.currentSrc || node.getAttribute("src") || node.getAttribute("data-src") || "";
+      if (!/^https?:\\/\\//i.test(url)) return false;
+      if (!seen[url]) {
+        seen[url] = true;
+        images.push(url);
+      }
+    }
+    if (!images.length) return false;
+    respond({ ok: true, images: images });
+    return true;
+  }
+
+  if (collect()) return;
+  var attempts = 0;
+  timer = window.setInterval(function () {
+    attempts += 1;
+    if (collect()) return;
+    var error = document.querySelector(".vw-empty, .novel-loading");
+    if (error) {
+      respond({ ok: false, error: (error.textContent || "reader error").trim() });
+      return;
+    }
+    if (attempts >= 100) {
+      respond({ ok: false, error: "timeout waiting for reader images" });
+    }
+  }, 200);
+})();`;
+  }
+
+  parseNextWebviewImageResponse(payload, readerPath) {
+    let parsed = payload;
+    if (typeof payload === "string") {
+      try {
+        parsed = JSON.parse(payload);
+      } catch (_) {
+        throw new Error(
+          `Next Webtoon reader invalid response parserFamily=next url=${readerPath}`,
+        );
+      }
+    }
+
+    if (parsed?.ok !== true || !Array.isArray(parsed?.images)) {
+      const detail =
+        typeof parsed?.error === "string" && parsed.error.trim()
+          ? ` error=${parsed.error.trim()}`
+          : "";
+      throw new Error(
+        `Next Webtoon reader invalid response parserFamily=next url=${readerPath}${detail}`,
+      );
+    }
+
+    const images = [];
+    const seen = new Set();
+    for (const image of parsed.images) {
+      if (typeof image !== "string" || !/^https?:\/\//i.test(image)) continue;
+      if (seen.has(image)) continue;
+      seen.add(image);
+      images.push(image);
+    }
+    if (images.length === 0) {
+      throw new Error(
+        `Next Webtoon reader empty response parserFamily=next url=${readerPath}`,
+      );
+    }
+    return images;
+  }
+
   getUniqueTexts(elements) {
     const values = [];
     const seen = new Set();
@@ -897,6 +1003,28 @@ class DefaultExtension extends MProvider {
   async getDetail(url) {
     if (this.getParserFamily() === "next") return this.fetchNextDetail(url);
     throw new Error("Legacy Webtoon detail is not implemented");
+  }
+
+  async getPageList(url) {
+    if (this.getParserFamily() !== "next") {
+      throw new Error("Legacy Webtoon reader is not implemented");
+    }
+
+    const readerPath = this.normalizeNextReaderLink(url);
+    if (typeof evaluateJavascriptViaWebview !== "function") {
+      throw new Error(
+        `WebView bridge unavailable parserFamily=next url=${readerPath}`,
+      );
+    }
+
+    const payload = await evaluateJavascriptViaWebview(
+      `${this.getNextBaseUrl()}${readerPath}`,
+      this.getHeaders(),
+      [this.createNextReaderImageExtractorScript(readerPath)],
+    );
+    return this.parseNextWebviewImageResponse(payload, readerPath).map(
+      (image) => ({ url: image, headers: this.getHeaders() }),
+    );
   }
 
   async search(query, page, filters) {

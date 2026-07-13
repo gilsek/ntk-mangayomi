@@ -418,6 +418,7 @@ function loadWebtoonSource({
   statusCode = 200,
   headers = { "content-type": "text/html; charset=utf-8" },
   responses,
+  webview,
 } = {}) {
   assert.ok(
     fs.existsSync(sourcePath),
@@ -451,13 +452,15 @@ function loadWebtoonSource({
     }
   }
 
-  const context = vm.createContext({
+  const contextValues = {
     Client: TestClient,
     Document: TestDocument,
     MProvider: TestProvider,
     SharedPreferences: TestPreferences,
     console,
-  });
+  };
+  if (webview) contextValues.evaluateJavascriptViaWebview = webview;
+  const context = vm.createContext(contextValues);
 
   const code = fs.readFileSync(sourcePath, "utf8");
   vm.runInContext(
