@@ -18,11 +18,11 @@
 - The source file is `javascript/manga/src/ko/ntk_manhwa.js`; it contains exactly one `DefaultExtension` and does not import or share parsers with `ntk.js` or `ntk_webtoon.js`.
 - Tests live only under `tests/manhwa/`; feature-specific test DOM implementations and fixtures stay in the owning feature directory.
 - Popular uses `/rank?period=week&kind=manhwa` and has only one page.
-- Latest uses `/manhwa/updates` and preserves the observed server pagination contract.
+- Latest uses `/manhwa/updates`. The observed server HTML always renders the same first 60 cards even with a `page` query, so the extension exposes one page and returns an empty page without a request for `page > 1`.
 - Title search uses `/search` with a `kind=manhwa` discriminator and only returns `/manhwa/` works.
 - Empty-title search uses the live `/api/manhwa-list` filter contract; no Webtoon filter values are copied without current Manhwa evidence.
 - Detail uses `/manhwa/{workId}`.
-- Full episodes use `/api/manhwa/{workId}/episodes/viewer-nav`.
+- Full episodes use `/api/manhwa/{workId}/episodes/viewer-nav`, whose live root is `{ ok, episodes }` and has no `total` field.
 - Work and episode IDs are opaque non-empty path segments. Numeric and `u-...` values remain strings.
 - Chapter URLs use `/manhwa/{workId}/{episodeId}` and retain the API's order.
 - The implementation must support at least 2,000 returned episodes without HTML `epage` crawling.
@@ -179,7 +179,7 @@ Record this commit as the base for Tasks 2-4.
 
 - [ ] **Step 1: Capture and document the live list contracts**
 
-Fetch the weekly ranking and latest pages with the source headers. Save minimal sanitized HTML fixtures that retain the actual containers, card classes, link paths, cover attributes, platform-logo images, and pagination markers. Record status and content type in the task report; do not save cookies or secrets.
+Fetch the weekly ranking and latest pages with the source headers. Save minimal sanitized HTML fixtures that retain `main.rank-v2-page`, the champion/runner/row cards, `main.container.manhwa-updates`, `ul.upd-grid`, `li.upd-card`, the actual work links, cover attributes, and empty marker. Record status and content type in the task report; do not save cookies or secrets.
 
 - [ ] **Step 2: Write failing request tests**
 
@@ -192,7 +192,7 @@ assert.equal(url.searchParams.get("kind"), "manhwa");
 assert.deepEqual(await extension.getPopular(2), { list: [], hasNextPage: false });
 ```
 
-Assert Latest uses `/manhwa/updates`, sends the observed page parameter only as the live site requires, and exposes `supportsLatest === true`.
+Assert Latest uses `/manhwa/updates` only for page one, returns an empty page without a request for `page > 1`, and exposes `supportsLatest === true`.
 
 - [ ] **Step 3: Run request tests and observe RED**
 
@@ -200,7 +200,7 @@ Run the two list tests. Expected: feature placeholder errors.
 
 - [ ] **Step 4: Write failing parser and error tests**
 
-Cover ranking order, latest order, titles, `/manhwa/` links, missing covers, platform logo rejection, explicit empty page, last-page detection, HTTP failure, non-HTML response, missing required container, malformed card, and unrelated `/webtoon/` cards.
+Cover the 50-card ranking order, the 60-card Latest order, titles, `/manhwa/` links, missing covers, platform logo rejection, `div.board-empty > div.t` empty state, fixed last-page behavior, HTTP failure, non-HTML response, missing required container, malformed card, and unrelated `/webtoon/` cards. Latest work titles come from `.upd-title`, work links from `a.upd-allbtn`, and covers from `.upd-thumb > img`; never use the episode-suffixed title on `a.upd-card-main`.
 
 - [ ] **Step 5: Implement the minimum list methods**
 
@@ -311,7 +311,7 @@ git commit -m "feat: add next manhwa detail"
 
 - [ ] **Step 4: Write and fail viewer-nav episode tests**
 
-Assert endpoint `/api/manhwa/{workId}/episodes/viewer-nav`, exact API order, titles, opaque IDs, `/manhwa/{workId}/{episodeId}` URLs, empty list, 2,015 episodes, total mismatch, missing ID/title, duplicate ID, malformed JSON, wrong content type, and HTTP errors. `epNo` may differ from the visible title and must not replace a non-empty server title.
+Assert endpoint `/api/manhwa/{workId}/episodes/viewer-nav`, `ok === true`, exact API order, titles, opaque IDs, `/manhwa/{workId}/{episodeId}` URLs, empty list, 2,015 episodes, missing ID/title, duplicate ID, malformed JSON, wrong content type, and HTTP errors. Reject a missing/non-boolean `ok` or non-array `episodes`. Do not require or synthesize a `total` field. `epNo` may differ from the visible title and must not replace a non-empty server title.
 
 - [ ] **Step 5: Implement full episodes and commit the logical `0.205` checkpoint**
 
