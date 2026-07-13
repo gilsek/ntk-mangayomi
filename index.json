@@ -34,14 +34,14 @@
     "hasCloudflare": false,
     "sourceCodeUrl": "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_manhwa.js",
     "apiUrl": "",
-    "version": "0.206",
+    "version": "0.207",
     "isManga": true,
     "itemType": 0,
     "isFullData": false,
     "appMinVerReq": "0.5.0",
     "additionalParams": "",
     "sourceCodeLanguage": 1,
-    "notes": "Popular, Latest, search, filters, detail, and full episodes are implemented; reader image loading is not implemented."
+    "notes": "Popular, Latest, search, filters, detail, full episodes, and a WebView-backed reader with a Manhwa image API fast path and DOM fallback are implemented. Reader requires the modified Mangayomi WebView payload-preservation patch."
   },
   {
     "name": "NTK Novel",

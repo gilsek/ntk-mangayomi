@@ -14,7 +14,7 @@ const mangayomiSources = [
     sourceCodeUrl:
       "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_manhwa.js",
     apiUrl: "",
-    version: "0.206",
+    version: "0.207",
     isManga: true,
     itemType: 0,
     isFullData: false,
@@ -22,7 +22,7 @@ const mangayomiSources = [
     additionalParams: "",
     sourceCodeLanguage: 1,
     notes:
-      "Popular, Latest, search, filters, detail, and full episodes are implemented; reader image loading is not implemented.",
+      "Popular, Latest, search, filters, detail, full episodes, and a WebView-backed reader with a Manhwa image API fast path and DOM fallback are implemented. Reader requires the modified Mangayomi WebView payload-preservation patch.",
     pkgPath: "manga/src/ko/ntk_manhwa.js",
   },
 ];
@@ -825,6 +825,281 @@ const MANHWA_DETAIL_EPISODE_METHODS = {
 };
 // endregion MANHWA_DETAIL_EPISODE_METHODS
 
+// region MANHWA_READER_METHODS
+const MANHWA_READER_METHODS = {
+  createNextReaderImageExtractorScript(readerPath) {
+    return `(function () {
+  if (window.__ntkManhwaReaderExtractor) return;
+  window.__ntkManhwaReaderExtractor = true;
+  var expectedPath = ${JSON.stringify(readerPath)};
+  var finished = false;
+  var timer = null;
+
+  function respond(payload) {
+    if (finished) return;
+    finished = true;
+    if (timer) window.clearInterval(timer);
+    window.flutter_inappwebview.callHandler(
+      "setResponse",
+      JSON.stringify(payload),
+    );
+  }
+
+  if (window.location.pathname !== expectedPath) {
+    respond({ ok: false, error: "reader path mismatch" });
+    return;
+  }
+
+  function signalAdAck() {
+    window.__ntk_ad_ack_scope = expectedPath;
+    try {
+      window.dispatchEvent(
+        new CustomEvent("ntk-ad-ack-ready", {
+          detail: { scope: expectedPath },
+        }),
+      );
+    } catch (_) {}
+  }
+
+  function isValidImageUrl(value) {
+    if (typeof value !== "string" || value !== value.trim()) return false;
+    try {
+      var parsed = new URL(value);
+      return (
+        (parsed.protocol === "https:" || parsed.protocol === "http:") &&
+        !!parsed.hostname
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function apiImages(payload) {
+    if (!payload || !Array.isArray(payload.images)) return [];
+    var seen = {};
+    var images = [];
+    for (var i = 0; i < payload.images.length; i += 1) {
+      var image = payload.images[i];
+      var url = typeof image === "string" ? image : image && image.src;
+      if (!isValidImageUrl(url)) continue;
+      if (seen[url]) continue;
+      seen[url] = true;
+      images.push(url);
+    }
+    return images;
+  }
+
+  function isExpectedImageApiRequest(input, init, response) {
+    if (!response || response.ok !== true) return false;
+    var method = init && init.method;
+    if (!method && input && typeof input === "object") method = input.method;
+    if (String(method || "GET").toUpperCase() !== "POST") return false;
+    var rawUrl = input && input.url ? input.url : String(input || "");
+    try {
+      var parsed = new URL(rawUrl, window.location.href);
+      return (
+        parsed.origin === window.location.origin &&
+        parsed.pathname === "/api/manhwa-images"
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function installImageApiInterceptor() {
+    if (typeof window.fetch !== "function") return;
+    var originalFetch = window.fetch;
+    window.fetch = function () {
+      var fetchArguments = arguments;
+      return originalFetch.apply(this, fetchArguments).then(function (response) {
+        var input = fetchArguments[0];
+        var init = fetchArguments[1];
+        if (!isExpectedImageApiRequest(input, init, response)) {
+          return response;
+        }
+        try {
+          response.clone().text().then(function (text) {
+            if (finished) return;
+            try {
+              var payload = JSON.parse(text);
+              if (
+                payload &&
+                /^(?:ad_ack_required|fingerprint_required|browser_key_required)$/.test(
+                  payload.error || "",
+                )
+              ) {
+                signalAdAck();
+                return;
+              }
+              var images = apiImages(payload);
+              if (images.length) respond({ ok: true, images: images });
+            } catch (_) {}
+          }).catch(function () {});
+        } catch (_) {}
+        return response;
+      });
+    };
+  }
+
+  if (typeof window.addEventListener === "function") {
+    window.addEventListener("ntk-ack-rearm", function (event) {
+      if (event && event.detail && event.detail.scope === expectedPath) {
+        signalAdAck();
+      }
+    });
+  }
+  signalAdAck();
+  installImageApiInterceptor();
+
+  function collect() {
+    var container = document.querySelector(".vw-imgs");
+    if (!container || !container.children.length) return false;
+    var nodes = Array.prototype.slice.call(
+      container.querySelectorAll(".viewer-lazy-img"),
+    );
+    if (nodes.length !== container.children.length) return false;
+    var seen = {};
+    var images = [];
+    for (var i = 0; i < nodes.length; i += 1) {
+      var node = nodes[i];
+      var url = node.currentSrc ||
+        node.getAttribute("src") ||
+        node.getAttribute("data-src") ||
+        "";
+      if (!isValidImageUrl(url)) return false;
+      if (!seen[url]) {
+        seen[url] = true;
+        images.push(url);
+      }
+    }
+    if (!images.length) return false;
+    respond({ ok: true, images: images });
+    return true;
+  }
+
+  if (collect()) return;
+  var attempts = 0;
+  timer = window.setInterval(function () {
+    attempts += 1;
+    if (collect()) return;
+    var error = document.querySelector(".vw-empty");
+    if (error) {
+      respond({
+        ok: false,
+        error: (error.textContent || "reader error").trim(),
+      });
+      return;
+    }
+    if (attempts >= 100) {
+      respond({ ok: false, error: "timeout waiting for reader images" });
+    }
+  }, 200);
+})();`;
+  },
+
+  normalizeReaderImageUrl(value) {
+    if (typeof value !== "string" || value !== value.trim()) return "";
+    if (typeof URL === "function") {
+      try {
+        const parsed = new URL(value);
+        if (
+          (parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+          !parsed.hostname
+        ) {
+          return "";
+        }
+        return value;
+      } catch (_) {
+        return "";
+      }
+    }
+
+    const absolute = value.match(
+      /^(https?):\/\/([^/?#]+)(?:[/?#][^\s]*)?$/i,
+    );
+    if (!absolute || absolute[2].includes("@")) return "";
+    const authority = absolute[2];
+    if (authority.startsWith("[")) {
+      const ipv6 = authority.match(/^\[[0-9a-f:.]+\](?::(\d{1,5}))?$/i);
+      if (!ipv6 || (ipv6[1] && Number(ipv6[1]) > 65535)) return "";
+    } else {
+      const hostPort = authority.match(/^([^:]+)(?::(\d{1,5}))?$/);
+      if (!hostPort || !/^[a-z0-9.-]+$/i.test(hostPort[1])) return "";
+      if (
+        hostPort[1].startsWith(".") ||
+        hostPort[1].endsWith(".") ||
+        hostPort[1].includes("..")
+      ) {
+        return "";
+      }
+      if (hostPort[2] && Number(hostPort[2]) > 65535) return "";
+    }
+    return value;
+  },
+
+  parseNextWebviewImageResponse(payload, readerPath) {
+    let parsed = payload;
+    if (typeof payload === "string") {
+      try {
+        parsed = JSON.parse(payload);
+      } catch (_) {
+        throw new Error(
+          `Next Manhwa reader invalid response parserFamily=next url=${readerPath}`,
+        );
+      }
+    }
+
+    if (parsed?.ok !== true || !Array.isArray(parsed?.images)) {
+      throw new Error(
+        `Next Manhwa reader invalid response parserFamily=next url=${readerPath}`,
+      );
+    }
+
+    const images = [];
+    const seen = new Set();
+    for (const image of parsed.images) {
+      const normalizedImage = MANHWA_READER_METHODS.normalizeReaderImageUrl(image);
+      if (!normalizedImage || seen.has(normalizedImage)) continue;
+      seen.add(normalizedImage);
+      images.push(normalizedImage);
+    }
+    if (images.length === 0) {
+      throw new Error(
+        `Next Manhwa reader invalid response parserFamily=next url=${readerPath}`,
+      );
+    }
+    return images;
+  },
+
+  async getPageList(url) {
+    const readerPath = this.normalizeChapterLink(url);
+    if (typeof evaluateJavascriptViaWebview !== "function") {
+      throw new Error(
+        `Next Manhwa reader WebView bridge unavailable parserFamily=next url=${readerPath}`,
+      );
+    }
+
+    const headers = this.getHeaders();
+    let payload;
+    try {
+      payload = await evaluateJavascriptViaWebview(
+        `${this.getNextBaseUrl()}${readerPath}`,
+        headers,
+        [this.createNextReaderImageExtractorScript(readerPath)],
+      );
+    } catch (_) {
+      throw new Error(
+        `Next Manhwa reader WebView failed parserFamily=next url=${readerPath}`,
+      );
+    }
+
+    return this.parseNextWebviewImageResponse(payload, readerPath).map(
+      (image) => ({ url: image, headers }),
+    );
+  },
+};
+// endregion MANHWA_READER_METHODS
+
 class DefaultExtension extends MProvider {
   constructor() {
     super();
@@ -903,8 +1178,23 @@ class DefaultExtension extends MProvider {
     return MANHWA_DETAIL_EPISODE_METHODS.getDetail.call(this, url);
   }
 
-  async getPageList() {
-    throw new Error("NTK Manhwa reader is not implemented");
+  createNextReaderImageExtractorScript(readerPath) {
+    return MANHWA_READER_METHODS.createNextReaderImageExtractorScript.call(
+      this,
+      readerPath,
+    );
+  }
+
+  parseNextWebviewImageResponse(payload, readerPath) {
+    return MANHWA_READER_METHODS.parseNextWebviewImageResponse.call(
+      this,
+      payload,
+      readerPath,
+    );
+  }
+
+  async getPageList(url) {
+    return MANHWA_READER_METHODS.getPageList.call(this, url);
   }
 
   getSourcePreferences() {

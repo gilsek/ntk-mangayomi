@@ -17,7 +17,7 @@ function assertPublishedManhwaMetadata(manhwa) {
   assert.equal(manhwa.id, 260713002);
   assert.equal(manhwa.name, "NTK Manhwa");
   assert.equal(manhwa.baseUrl, "https://sbxh9.com");
-  assert.equal(manhwa.version, "0.206");
+  assert.equal(manhwa.version, "0.207");
   assert.equal(manhwa.itemType, 0);
   assert.equal(manhwa.isManga, true);
   assert.equal(manhwa.additionalParams, "");
@@ -29,7 +29,9 @@ function assertPublishedManhwaMetadata(manhwa) {
     manhwa.notes,
     /Popular.*Latest.*search.*filters.*detail.*episodes/i,
   );
-  assert.match(manhwa.notes, /reader.*not implemented/i);
+  assert.match(manhwa.notes, /WebView-backed reader/i);
+  assert.match(manhwa.notes, /image API fast path.*DOM fallback/i);
+  assert.doesNotMatch(manhwa.notes, /reader.*not implemented/i);
 }
 
 test("publishes exactly one current NTK Manhwa index entry", () => {

@@ -19,7 +19,9 @@ test("exposes the frozen NTK Manhwa source metadata", () => {
   assert.equal(sources[0].appMinVerReq, "0.5.0");
   assert.equal(sources[0].pkgPath, "manga/src/ko/ntk_manhwa.js");
   assert.match(sources[0].sourceCodeUrl, /\/ntk_manhwa\.js$/);
-  assert.match(sources[0].version, /^0\.\d+$/);
+  assert.equal(sources[0].version, "0.207");
+  assert.match(sources[0].notes, /WebView-backed reader/i);
+  assert.doesNotMatch(sources[0].notes, /reader.*not implemented/i);
 });
 
 test("uses a numeric preference to build the current Next base URL", () => {
@@ -167,13 +169,13 @@ test("rejects unsafe or malformed chapter links without echoing them", () => {
   }
 });
 
-test("keeps one client instance and leaves the reader unimplemented", async () => {
+test("keeps one client instance and rejects a missing WebView bridge", async () => {
   const { extension, requests } = loadManhwaSource();
   const client = extension.client;
 
   await assert.rejects(
     () => extension.getPageList("/manhwa/work/episode"),
-    /reader.*not implemented/i,
+    /WebView bridge unavailable.*parserFamily=next/i,
   );
 
   assert.equal(extension.client, client);

@@ -47,6 +47,7 @@ function loadManhwaSource({
   preferences = {},
   responses,
   DocumentClass = EmptyDocument,
+  webview,
 } = {}) {
   assert.ok(
     fs.existsSync(sourcePath),
@@ -93,6 +94,7 @@ function loadManhwaSource({
     Document: DocumentClass,
     MProvider: TestProvider,
     SharedPreferences: TestPreferences,
+    evaluateJavascriptViaWebview: webview,
     console,
   });
 
