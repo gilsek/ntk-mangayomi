@@ -167,24 +167,10 @@ test("rejects unsafe or malformed chapter links without echoing them", () => {
   }
 });
 
-test("keeps feature methods as isolated not-implemented delegates", async () => {
+test("keeps one client instance and leaves the reader unimplemented", async () => {
   const { extension, requests } = loadManhwaSource();
   const client = extension.client;
 
-  await assert.rejects(() => extension.getPopular(1), /list.*not implemented/i);
-  await assert.rejects(
-    () => extension.getLatestUpdates(1),
-    /list.*not implemented/i,
-  );
-  await assert.rejects(
-    () => extension.search("title", 1, []),
-    /search.*not implemented/i,
-  );
-  assert.throws(() => extension.getFilterList(), /filter.*not implemented/i);
-  await assert.rejects(
-    () => extension.getDetail("/manhwa/work"),
-    /detail.*not implemented/i,
-  );
   await assert.rejects(
     () => extension.getPageList("/manhwa/work/episode"),
     /reader.*not implemented/i,
