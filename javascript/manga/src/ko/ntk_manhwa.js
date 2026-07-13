@@ -37,25 +37,56 @@ function normalizeManhwaLink(value, expectedSegmentCount, errorMessage, baseUrl)
     throw new Error(errorMessage);
   };
   const candidate = typeof value === "string" ? value.trim() : "";
-  if (!candidate || candidate.includes("?") || candidate.includes("#")) {
-    invalidLink();
-  }
-
-  let path = candidate;
-  const absolute = candidate.match(
-    /^(https):\/\/([^/?#]+)(\/[^?#]*)$/i,
-  );
-  if (absolute) {
-    const origin = `${absolute[1].toLowerCase()}://${absolute[2].toLowerCase()}`;
-    if (origin !== baseUrl.toLowerCase()) invalidLink();
-    path = absolute[3];
-  } else if (
-    /^[a-z][a-z0-9+.-]*:/i.test(candidate) ||
-    candidate.startsWith("//") ||
-    !candidate.startsWith("/")
+  if (
+    !candidate ||
+    candidate.includes("?") ||
+    candidate.includes("#") ||
+    candidate.includes("\\") ||
+    /%(?:2e|2f|5c)/i.test(candidate)
   ) {
     invalidLink();
   }
+
+  const absolute = candidate.match(
+    /^(https):\/\/([^/?#]+)(\/[^?#]*)$/i,
+  );
+  if (
+    !absolute &&
+    (/^[a-z][a-z0-9+.-]*:/i.test(candidate) ||
+      candidate.startsWith("//") ||
+      !candidate.startsWith("/"))
+  ) {
+    invalidLink();
+  }
+
+  const rawPath = absolute ? absolute[3] : candidate;
+  let origin;
+  let baseOrigin;
+  let path;
+  if (typeof URL === "function") {
+    try {
+      const parsed = new URL(candidate, baseUrl);
+      const parsedBase = new URL(baseUrl);
+      origin = parsed.origin.toLowerCase();
+      baseOrigin = parsedBase.origin.toLowerCase();
+      path = parsed.pathname;
+    } catch (_) {
+      invalidLink();
+    }
+  } else {
+    const fallbackOrigin = (authority) => {
+      const match = authority.match(/^([^:@]+)(?::(\d+))?$/);
+      if (!match) invalidLink();
+      const port = match[2];
+      return `https://${match[1].toLowerCase()}${
+        port && Number(port) !== 443 ? `:${port}` : ""
+      }`;
+    };
+    origin = absolute ? fallbackOrigin(absolute[2]) : baseUrl.toLowerCase();
+    baseOrigin = baseUrl.toLowerCase();
+    path = rawPath;
+  }
+  if (origin !== baseOrigin || path !== rawPath) invalidLink();
 
   const segments = path.split("/");
   if (

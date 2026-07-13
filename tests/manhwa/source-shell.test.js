@@ -90,6 +90,10 @@ test("normalizes relative and same-origin absolute Manhwa links", () => {
     "/manhwa/u-work",
   );
   assert.equal(
+    extension.normalizeWorkLink("https://sbxh9.com:443/manhwa/u-work"),
+    "/manhwa/u-work",
+  );
+  assert.equal(
     extension.normalizeChapterLink("/manhwa/53483967/u-episode"),
     "/manhwa/53483967/u-episode",
   );
@@ -119,6 +123,10 @@ test("rejects unsafe or malformed work links without echoing them", () => {
     "javascript:alert(1)",
     "data:text/plain,work",
     "//sbxh9.com/manhwa/work",
+    "/manhwa/%2e%2e",
+    "/manhwa/work%2Fextra",
+    "/manhwa/work%5cextra",
+    "/manhwa/work\\extra",
     "/manhwa/",
     "/manhwa/work/episode",
   ];
@@ -141,6 +149,10 @@ test("rejects unsafe or malformed chapter links without echoing them", () => {
     "javascript:alert(1)",
     "data:text/plain,episode",
     "//sbxh9.com/manhwa/work/episode",
+    "/manhwa/work/%2E%2E",
+    "/manhwa/work/episode%2fextra",
+    "/manhwa/work/episode%5Cextra",
+    "/manhwa/work\\extra/episode",
     "/manhwa//episode",
     "/manhwa/work/",
     "/manhwa/work/episode/extra",
