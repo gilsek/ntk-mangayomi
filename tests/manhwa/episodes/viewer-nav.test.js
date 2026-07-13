@@ -123,6 +123,35 @@ test("rejects missing, blank, or non-string episode IDs", async () => {
   }
 });
 
+test("rejects unsafe episode IDs without exposing the supplied value", async () => {
+  const unsafeIds = [
+    ".",
+    "..",
+    "episode/child",
+    "episode\\child",
+    "https://private.invalid/episode",
+  ];
+  const expectedMessage =
+    "Next Manhwa episode structure error url=https://sbxh9.com/api/manhwa/work/episodes/viewer-nav invalid=sourceEpisodeId";
+
+  for (const sourceEpisodeId of unsafeIds) {
+    const { extension } = loadEpisodes({
+      episodeBody: JSON.stringify({
+        ok: true,
+        episodes: [{ sourceEpisodeId, title: "1화" }],
+      }),
+    });
+
+    await assert.rejects(
+      () => extension.getDetail("/manhwa/work"),
+      (error) => {
+        assert.equal(error.message, expectedMessage);
+        return true;
+      },
+    );
+  }
+});
+
 test("rejects missing or blank server episode titles", async () => {
   for (const title of [undefined, "", "   "]) {
     const episode = { sourceEpisodeId: "episode-1", epNo: 1 };

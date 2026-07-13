@@ -774,10 +774,21 @@ const MANHWA_DETAIL_EPISODE_METHODS = {
         );
       }
 
+      let chapterLink;
+      try {
+        chapterLink = this.normalizeChapterLink(
+          `${link}/${encodeURIComponent(sourceEpisodeId)}`,
+        );
+      } catch (_) {
+        throw new Error(
+          `Next Manhwa episode structure error url=${requestUrl} invalid=sourceEpisodeId`,
+        );
+      }
+
       seenIds.add(sourceEpisodeId);
       chapters.push({
         name: title,
-        url: `${link}/${encodeURIComponent(sourceEpisodeId)}`,
+        url: chapterLink,
         scanlator: "",
       });
     }
