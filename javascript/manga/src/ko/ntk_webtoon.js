@@ -14,7 +14,7 @@ const mangayomiSources = [
     sourceCodeUrl:
       "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_webtoon.js",
     apiUrl: "",
-    version: "0.102",
+    version: "0.103",
     isManga: true,
     itemType: 0,
     isFullData: false,
@@ -22,7 +22,7 @@ const mangayomiSources = [
     additionalParams: "",
     sourceCodeLanguage: 1,
     notes:
-      "Next Popular, Latest, and title search preview; filters, detail, and reader are not implemented.",
+      "Next Popular, Latest, and title search preview with client-safe cover selection; filters, detail, and reader are not implemented.",
     pkgPath: "manga/src/ko/ntk_webtoon.js",
   },
 ];
@@ -260,8 +260,15 @@ class DefaultExtension extends MProvider {
     }
 
     const link = element.getHref || element.attr("href") || "";
-    const cover = element.selectFirst(".thumb img:not(.platform-icon)");
-    const image = cover.getSrc || cover.attr("src") || "";
+    let image = "";
+    for (const candidate of element.select(".thumb img")) {
+      const classes = (candidate.attr("class") || "")
+        .split(/\s+/)
+        .filter(Boolean);
+      if (classes.includes("platform-icon")) continue;
+      image = candidate.getSrc || candidate.attr("src") || "";
+      break;
+    }
 
     return {
       name,
@@ -344,7 +351,7 @@ class DefaultExtension extends MProvider {
     }
 
     const link = element.getHref || element.attr("href") || "";
-    const cover = element.selectFirst(".thumb img:not(.platform-icon)");
+    const cover = element.selectFirst(".thumb img.search-thumb-img");
     const image = cover.getSrc || cover.attr("src") || "";
 
     return {

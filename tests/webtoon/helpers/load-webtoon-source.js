@@ -136,15 +136,23 @@ function matchingElements(html, selector) {
         results.push(new TestElement(match[0], match[1]));
       }
     }
-  } else if (selector === ".thumb img:not(.platform-icon)") {
+  } else if (
+    selector === ".thumb img:not(.platform-icon)" ||
+    selector === ".thumb img" ||
+    selector === ".thumb img.search-thumb-img"
+  ) {
     const thumb = html.match(
       /<div\b[^>]*class=["'][^"']*thumb[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
     );
     if (!thumb) return results;
     for (const match of thumb[1].matchAll(/<img\b[^>]*>/gi)) {
-      if (!hasClass(match[0], "platform-icon")) {
-        results.push(new TestElement(match[0], match[0]));
+      if (
+        selector === ".thumb img.search-thumb-img" &&
+        !hasClass(match[0], "search-thumb-img")
+      ) {
+        continue;
       }
+      results.push(new TestElement(match[0], match[0]));
     }
   } else if (
     selector === "a.rank-v2-champion" ||
