@@ -475,3 +475,43 @@ https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/index.json
 ```
 
 사용자 확인 항목은 Latest 탭 노출, 1·2페이지 이동, 한글 제목 일부 검색, 다른 콘텐츠 종류 미노출과 빈 검색 결과다. 이 확인 전에는 필터 구현으로 넘어가지 않는다.
+
+### Task 5: Mangayomi 섬네일 선택자 호환성 수정 (`0.103`)
+
+**Files:**
+- Modify: `tests/webtoon/helpers/load-webtoon-source.js`
+- Modify: `tests/webtoon/next-latest-parser.test.js`
+- Modify: `tests/webtoon/next-search-parser.test.js`
+- Modify: `javascript/manga/src/ko/ntk_webtoon.js`
+- Modify: `index.json`
+- Modify: `tests/webtoon/index-entry.test.js`
+- Modify: `tests/webtoon/next-popular-request.test.js`
+- Modify: `tests/ntk.test.js`
+
+**Interfaces:**
+- Consumes: 기존 `parseNextLatestCard`와 `parseNextSearchCard`의 `{ name, link, imageUrl }` 반환 계약.
+- Produces: Mangayomi 런타임에서 플랫폼 로고를 표지로 선택하지 않는 `0.103` source와 index.
+
+- [ ] **Step 1: 실제 런타임 불일치를 재현하는 실패 테스트를 만든다**
+
+테스트 DOM 하네스에서 `.thumb img:not(.platform-icon)`을 Mangayomi 런타임처럼 첫 이미지로 처리하고, `.thumb img` 및 `.thumb img.search-thumb-img`를 지원한다. 기존 Latest와 검색 fixture는 플랫폼 로고가 표지보다 먼저 나오므로 현재 제품 코드의 `imageUrl` 검증이 플랫폼 로고 URL을 받아 실패해야 한다.
+
+- [ ] **Step 2: Latest와 검색 집중 테스트의 RED를 확인한다**
+
+```powershell
+node --test tests/webtoon/next-latest-parser.test.js tests/webtoon/next-search-parser.test.js
+```
+
+Expected: Latest와 검색의 표지 URL assertion이 실제 표지 대신 플랫폼 로고를 받아 실패한다.
+
+- [ ] **Step 3: 두 파서를 독립적으로 최소 수정한다**
+
+Latest는 `.thumb img`를 순회하면서 `class` 토큰에 `platform-icon`이 없는 첫 이미지를 선택한다. 검색은 사이트가 제공하는 `.thumb img.search-thumb-img`를 직접 선택한다. 두 카드 파서 사이에 공통 파서를 새로 만들지 않는다.
+
+- [ ] **Step 4: `0.103` 메타데이터와 회귀 검증을 갱신한다**
+
+내장 source, `index.json`, manifest 기대값을 모두 `0.103`으로 맞춘 뒤 집중 테스트, Webtoon 전체 테스트, `pnpm test`, `git diff --check`를 실행한다.
+
+- [ ] **Step 5: 검증된 변경을 게시한다**
+
+추적 대상 파일만 커밋하고 `master`에 fast-forward 병합한 뒤 전체 테스트를 다시 실행한다. 원격 `master`를 fetch해 분기 여부를 확인하고 push 후 raw `index.json`이 `0.103`을 반환하는지 확인한다.
