@@ -80,12 +80,6 @@ test("returns an empty Popular page after the fixed ranking page", async () => {
   assert.equal(requests.length, 0);
 });
 
-test("keeps unfinished Next filters unavailable", () => {
-  const { extension } = loadWebtoonSource();
-
-  assert.deepEqual(JSON.parse(JSON.stringify(extension.getFilterList())), []);
-});
-
 test("keeps Legacy latest and filters behind the Legacy preference", () => {
   const { extension } = loadWebtoonSource({
     preferences: { ntk_webtoon_parser_family: "legacy" },

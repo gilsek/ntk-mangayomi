@@ -32,6 +32,45 @@ const PARSER_FAMILY_PREFERENCE = "ntk_webtoon_parser_family";
 const LEGACY_DEFAULT_BASE_URL = "https://newtoki1.org";
 const NEXT_DEFAULT_DOMAIN_NUMBER = "9";
 const NEXT_DOMAIN_NUMBER_PREFERENCE = "ntk_webtoon_next_domain_number";
+const NEXT_MAIN_GENRES = [
+  [1, "학원"], [2, "액션"], [3, "SF"], [4, "스토리"], [5, "판타지"],
+  [6, "BL/백합"], [9, "드라마"], [10, "로맨스"], [11, "시대"],
+  [12, "스포츠"], [13, "일상"], [16, "성인"], [19, "무협"],
+];
+const NEXT_DETAIL_GENRES = [
+  [7, "개그/코미디"], [8, "연애/순정"], [14, "추리/미스터리"], [15, "공포/스릴러"],
+  [17, "옴니버스"], [18, "에피소드"], [20, "소년"], [99, "기타"],
+  [517, "절륜공"], [529, "존댓말공"], [287, "월드드랍"], [288, "WorldDrop"],
+  [290, "다정남"], [291, "능글남"], [292, "능력녀"], [293, "절륜남"], [295, "직진남"],
+  [297, "유혹남"], [298, "순정녀"], [299, "캠퍼스물"], [301, "능력남"], [302, "동양풍"],
+  [304, "인외존재"], [306, "소꿉친구"], [310, "강공"], [311, "피폐물"], [312, "삼각관계"],
+  [315, "능글공"], [316, "집착공"], [317, "까칠수"], [333, "대형견남"], [336, "원나잇"],
+  [340, "성장물"], [343, "순수녀"], [379, "까칠공"], [380, "연상수"], [384, "미남공"],
+  [385, "순정공"], [387, "연하공"], [388, "대물공"], [390, "다정수"], [392, "계략공"],
+  [393, "대형견공"], [394, "단정수"], [409, "후회공"], [410, "다정공"], [413, "순진수"],
+  [414, "짝사랑수"], [416, "상처수"], [418, "동거"], [419, "미인수"], [420, "짝사랑"],
+  [424, "무심수"], [429, "애증"], [435, "사랑꾼공"], [436, "귀염수"], [438, "능력수"],
+  [440, "상처공"], [461, "오해/착각"], [102, "유부녀"], [103, "하드코어"], [114, "고수위"],
+  [121, "오피스"], [127, "능욕"], [135, "하렘"], [142, "강제"], [144, "연상공"],
+  [145, "미인공"], [147, "강수"], [148, "연하수"], [150, "미남수"], [151, "오메가버스"],
+  [152, "SM"], [153, "계약관계"], [154, "섹스파트너"], [155, "BL"], [156, "로코"],
+  [157, "다정녀"], [158, "순정남"], [160, "연상녀"], [161, "현대물"], [162, "연하남"],
+  [163, "첫사랑"], [164, "달달물"], [165, "여성인기19"], [166, "남성인기19"], [167, "나쁜남자"],
+  [168, "순진녀"], [169, "더티토크"], [193, "거유"], [206, "3P"], [207, "모럴리스"],
+  [209, "후방주의"], [234, "복수"], [241, "상처녀"], [243, "서양풍"], [245, "집착남"],
+  [246, "계략남"], [247, "로판"], [248, "소설원작"],
+];
+const NEXT_PLATFORMS = [
+  ["전체", ""], ["네이버", "1"], ["다음", "2"], ["카카오", "3"],
+  ["레진", "4"], ["투믹스", "5"], ["탑툰", "6"], ["코미카", "7"],
+  ["배틀코믹스", "8"], ["코믹GT", "9"], ["케이툰", "10"],
+  ["애니툰", "11"], ["폭스툰", "12"], ["피너툰", "13"],
+  ["봄툰", "14"], ["코미코", "15"], ["무툰", "16"], ["기타", "99"],
+];
+const NEXT_SORTS = [
+  ["최신순", "new"], ["신작순", "fresh"], ["북마크순", "hot"],
+  ["조회순", "views"], ["평점순", "rating"], ["화수순", "episodes"],
+];
 
 class DefaultExtension extends MProvider {
   get supportsLatest() {
@@ -154,6 +193,69 @@ class DefaultExtension extends MProvider {
     this.appendParameter(parameters, "field", "title");
     this.appendParameter(parameters, "match", "contains");
     return `${this.getNextBaseUrl()}/search?${parameters.join("&")}`;
+  }
+
+  getSelectedFilterValue(filters, type, fallback) {
+    const filter = (filters || []).find((candidate) => candidate.type === type);
+    if (!filter || !Number.isInteger(filter.state)) return fallback;
+    const option = filter.values?.[filter.state];
+    if (!option || option.value === undefined || option.value === null) {
+      return fallback;
+    }
+    return String(option.value);
+  }
+
+  getNextGenreStates(filters) {
+    const included = [];
+    const excluded = [];
+    const seen = new Set();
+
+    for (const type of ["mainGenres", "detailGenres"]) {
+      const group = (filters || []).find(
+        (candidate) => candidate.type === type,
+      );
+      for (const genre of group?.state || []) {
+        if (genre.state !== 1 && genre.state !== 2) continue;
+        const value = String(genre.value || "");
+        if (!value || seen.has(value)) continue;
+        seen.add(value);
+        if (genre.state === 1) included.push(value);
+        if (genre.state === 2) excluded.push(value);
+      }
+    }
+
+    return { included, excluded };
+  }
+
+  buildNextFilterUrl(page, filters) {
+    const parameters = [];
+    const workType = this.getSelectedFilterValue(
+      filters,
+      "workType",
+      "all",
+    );
+    this.appendParameter(
+      parameters,
+      "status",
+      workType === "completed" ? "completed" : "ongoing",
+    );
+    if (workType !== "completed") {
+      this.appendParameter(parameters, "cat", workType);
+    }
+    const { included, excluded } = this.getNextGenreStates(filters);
+    this.appendParameter(parameters, "tag", included.join(","));
+    this.appendParameter(parameters, "xtag", excluded.join(","));
+    this.appendParameter(
+      parameters,
+      "plat",
+      this.getSelectedFilterValue(filters, "platform", ""),
+    );
+    const sort = this.getSelectedFilterValue(filters, "sort", "new");
+    if (sort !== "new") this.appendParameter(parameters, "sort", sort);
+    this.appendParameter(parameters, "withTotal", "1");
+    this.appendParameter(parameters, "page", String(page));
+    this.appendParameter(parameters, "pageSize", "42");
+    return `${this.getNextBaseUrl()}/api/works?${parameters.join("&")}`;
   }
 
   parseNextRankCard(element, titleSelector, requestUrl) {
@@ -531,8 +633,53 @@ class DefaultExtension extends MProvider {
     });
   }
 
+  getNextFilterList() {
+    const select = (type, name, values) => ({
+      type_name: "SelectFilter",
+      type,
+      name,
+      state: 0,
+      values: values.map(([optionName, value]) => ({
+        type_name: "SelectOption",
+        name: optionName,
+        value,
+      })),
+    });
+    const group = (type, name, values) => ({
+      type_name: "GroupFilter",
+      type,
+      name,
+      state: values.map(([value, optionName]) => ({
+        type_name: "TriState",
+        type: "genre",
+        name: optionName,
+        value: String(value),
+        state: 0,
+      })),
+    });
+
+    return [
+      select("workType", "작품 구분", [
+        ["전체", "all"],
+        ["일반", "normal"],
+        ["비엘", "bl"],
+        ["성인", "adult"],
+        ["완결", "completed"],
+      ]),
+      {
+        type_name: "HeaderFilter",
+        type: "genreHint",
+        name: "장르: 체크=포함, 가로선=제외",
+      },
+      group("mainGenres", "주요 장르", NEXT_MAIN_GENRES),
+      group("detailGenres", "상세 장르", NEXT_DETAIL_GENRES),
+      select("platform", "플랫폼", NEXT_PLATFORMS),
+      select("sort", "정렬", NEXT_SORTS),
+    ];
+  }
+
   getFilterList() {
-    if (this.getParserFamily() === "next") return [];
+    if (this.getParserFamily() === "next") return this.getNextFilterList();
 
     const select = (type, name, values) => ({
       type_name: "SelectFilter",
