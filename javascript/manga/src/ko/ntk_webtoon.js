@@ -621,6 +621,7 @@ class DefaultExtension extends MProvider {
     return `(function () {
   if (window.__ntkWebtoonReaderExtractor) return;
   window.__ntkWebtoonReaderExtractor = true;
+  var expectedPath = ${JSON.stringify(readerPath)};
   var finished = false;
   var timer = null;
 
@@ -632,6 +633,11 @@ class DefaultExtension extends MProvider {
       "setResponse",
       JSON.stringify(payload),
     );
+  }
+
+  if (window.location.pathname !== expectedPath) {
+    respond({ ok: false, error: "reader path mismatch" });
+    return;
   }
 
   function collect() {
@@ -685,12 +691,8 @@ class DefaultExtension extends MProvider {
     }
 
     if (parsed?.ok !== true || !Array.isArray(parsed?.images)) {
-      const detail =
-        typeof parsed?.error === "string" && parsed.error.trim()
-          ? ` error=${parsed.error.trim()}`
-          : "";
       throw new Error(
-        `Next Webtoon reader invalid response parserFamily=next url=${readerPath}${detail}`,
+        `Next Webtoon reader invalid response parserFamily=next url=${readerPath}`,
       );
     }
 
