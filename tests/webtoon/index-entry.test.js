@@ -54,6 +54,6 @@ test("preserves the existing Manhwa and Novel registrations", () => {
   const entries = readIndex();
 
   assert.equal(entries.length, 3);
-  assert.equal(entries.filter((entry) => entry.id === 240710002).length, 1);
+  assert.equal(entries.filter((entry) => entry.id === 260713002).length, 1);
   assert.equal(entries.filter((entry) => entry.id === 240710003).length, 1);
 });

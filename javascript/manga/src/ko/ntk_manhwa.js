@@ -14,7 +14,7 @@ const mangayomiSources = [
     sourceCodeUrl:
       "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_manhwa.js",
     apiUrl: "",
-    version: "0.201",
+    version: "0.205",
     isManga: true,
     itemType: 0,
     isFullData: false,
@@ -22,7 +22,7 @@ const mangayomiSources = [
     additionalParams: "",
     sourceCodeLanguage: 1,
     notes:
-      "Internal Next Manhwa scaffold; lists, search, filters, detail, episodes, and reader are not implemented.",
+      "Popular, Latest, search, filters, detail, and full episodes are implemented; reader image loading is not implemented.",
     pkgPath: "manga/src/ko/ntk_manhwa.js",
   },
 ];
