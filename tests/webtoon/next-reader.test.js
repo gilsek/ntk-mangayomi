@@ -34,6 +34,112 @@ test("opens the exact Next episode URL and preserves image order", async () => {
   ]);
 });
 
+function createImageNode(url) {
+  return {
+    currentSrc: url,
+    getAttribute() {
+      return "";
+    },
+  };
+}
+
+function runExtractor(extension, observations) {
+  const responses = [];
+  const intervals = [];
+  const cleared = [];
+  let observationIndex = 0;
+  const readerPath = "/webtoon/17970/u-mrezmrs1-hypr";
+
+  vm.runInNewContext(
+    extension.createNextReaderImageExtractorScript(readerPath),
+    {
+      window: {
+        location: { pathname: readerPath },
+        setInterval(callback, milliseconds) {
+          intervals.push({ callback, milliseconds });
+          return 7;
+        },
+        clearInterval(timer) {
+          cleared.push(timer);
+        },
+        flutter_inappwebview: {
+          callHandler(name, payload) {
+            responses.push({ name, payload: JSON.parse(payload) });
+          },
+        },
+      },
+      document: {
+        querySelectorAll() {
+          const urls = observations[
+            Math.min(observationIndex, observations.length - 1)
+          ];
+          observationIndex += 1;
+          return urls.map(createImageNode);
+        },
+        querySelector() {
+          return null;
+        },
+      },
+    },
+  );
+
+  return { responses, intervals, cleared };
+}
+
+test("extractor waits for a changed image list to stabilize", () => {
+  const { extension } = loadWebtoonSource();
+  const first = "https://cdn.example/001.jpg";
+  const second = "https://cdn.example/002.jpg";
+  const execution = runExtractor(extension, [
+    [first],
+    [first, second],
+    [first, second],
+  ]);
+
+  assert.equal(execution.intervals.length, 1);
+  assert.equal(execution.intervals[0].milliseconds, 200);
+  assert.equal(execution.responses.length, 0);
+
+  execution.intervals[0].callback();
+  assert.equal(execution.responses.length, 0);
+
+  execution.intervals[0].callback();
+  assert.deepEqual(execution.responses, [{
+    name: "setResponse",
+    payload: { ok: true, images: [first, second] },
+  }]);
+});
+
+test("extractor returns an immediately complete list after one 200ms poll", () => {
+  const { extension } = loadWebtoonSource();
+  const images = [
+    "https://cdn.example/001.jpg",
+    "https://cdn.example/002.jpg",
+  ];
+  const execution = runExtractor(extension, [images, images]);
+
+  assert.equal(execution.responses.length, 0);
+  assert.equal(execution.intervals[0].milliseconds, 200);
+
+  execution.intervals[0].callback();
+  assert.deepEqual(execution.responses[0], {
+    name: "setResponse",
+    payload: { ok: true, images },
+  });
+});
+
+test("extractor clears its interval and responds only once", () => {
+  const { extension } = loadWebtoonSource();
+  const images = ["https://cdn.example/001.jpg"];
+  const execution = runExtractor(extension, [images, images, images]);
+
+  execution.intervals[0].callback();
+  execution.intervals[0].callback();
+
+  assert.equal(execution.responses.length, 1);
+  assert.deepEqual(execution.cleared, [7]);
+});
+
 test("rejects malformed links and invalid WebView payloads", async () => {
   const missingBridge = loadWebtoonSource().extension;
   await assert.rejects(
@@ -68,6 +174,75 @@ test("does not expose WebView error details", async () => {
       assert.equal(
         error.message,
         "Next Webtoon reader invalid response parserFamily=next url=/webtoon/17970/u-mrezmrs1-hypr",
+      );
+      assert.doesNotMatch(error.message, /secret|token=|session=/i);
+      return true;
+    },
+  );
+});
+
+test("rejects invalid or cross-origin reader links without exposing input", async () => {
+  const { extension } = loadWebtoonSource({ webview: async () => ({
+    ok: true,
+    images: ["https://cdn.example/001.jpg"],
+  }) });
+  const unsafeLinks = [
+    "/webtoon/17970?token=secret#session=secret",
+    "https://evil.example/webtoon/17970/episode?token=secret#session=secret",
+  ];
+
+  for (const link of unsafeLinks) {
+    await assert.rejects(
+      () => extension.getPageList(link),
+      (error) => {
+        assert.equal(
+          error.message,
+          "Next Webtoon invalid reader link parserFamily=next",
+        );
+        assert.doesNotMatch(error.message, /secret|token=|session=|evil\.example/i);
+        return true;
+      },
+    );
+  }
+});
+
+test("accepts same-origin absolute reader links and object payloads", async () => {
+  const calls = [];
+  const { extension } = loadWebtoonSource({
+    webview: async (url) => {
+      calls.push(url);
+      return {
+        ok: true,
+        images: ["https://cdn.example/001.jpg"],
+      };
+    },
+  });
+
+  const pages = JSON.parse(JSON.stringify(await extension.getPageList(
+    "https://sbxh9.com/webtoon/17970/u-mrezmrs1-hypr?token=secret#fragment",
+  )));
+
+  assert.deepEqual(calls, [
+    "https://sbxh9.com/webtoon/17970/u-mrezmrs1-hypr",
+  ]);
+  assert.deepEqual(pages.map((page) => page.url), [
+    "https://cdn.example/001.jpg",
+  ]);
+});
+
+test("converts WebView rejection to a safe reader failure", async () => {
+  const { extension } = loadWebtoonSource({
+    webview: async () => {
+      throw new Error("token=secret session=secret");
+    },
+  });
+
+  await assert.rejects(
+    () => extension.getPageList("/webtoon/17970/u-mrezmrs1-hypr"),
+    (error) => {
+      assert.equal(
+        error.message,
+        "Next Webtoon reader WebView failed parserFamily=next url=/webtoon/17970/u-mrezmrs1-hypr",
       );
       assert.doesNotMatch(error.message, /secret|token=|session=/i);
       return true;

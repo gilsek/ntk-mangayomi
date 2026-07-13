@@ -22,7 +22,7 @@ const mangayomiSources = [
     additionalParams: "",
     sourceCodeLanguage: 1,
     notes:
-      "Next Popular, Latest, title search, filters, detail, full episode lists, and WebView-backed reader with platform-safe covers.",
+      "Next Popular, Latest, title search, filters, detail, full episode lists, and WebView-backed reader with platform-safe covers. Reader requires modified Mangayomi with the WebView payload-preservation patch.",
     pkgPath: "manga/src/ko/ntk_webtoon.js",
   },
 ];
@@ -606,14 +606,24 @@ class DefaultExtension extends MProvider {
 
   normalizeNextReaderLink(url) {
     const value = typeof url === "string" ? url.trim() : "";
-    const withoutOrigin = value.replace(/^https?:\/\/[^/]+/i, "");
-    const path = withoutOrigin.split(/[?#]/)[0];
-    const match = path.match(/^\/webtoon\/([^/]+)\/([^/]+)$/);
-    if (!match) {
-      throw new Error(
-        `Next Webtoon invalid reader link parserFamily=next url=${value}`,
-      );
+    const invalidLink = () => {
+      throw new Error("Next Webtoon invalid reader link parserFamily=next");
+    };
+    let path = value;
+    const absolute = value.match(/^(https?):\/\/([^/?#]+)(\/[^?#]*)?(?:[?#].*)?$/i);
+    if (absolute) {
+      const origin = `${absolute[1].toLowerCase()}://${absolute[2].toLowerCase()}`;
+      if (origin !== this.getNextBaseUrl().toLowerCase()) invalidLink();
+      path = absolute[3] || "/";
+    } else {
+      if (/^[a-z][a-z0-9+.-]*:/i.test(value) || value.startsWith("//")) {
+        invalidLink();
+      }
+      path = value.split(/[?#]/)[0];
+      if (path && !path.startsWith("/")) path = `/${path}`;
     }
+    const match = path.match(/^\/webtoon\/([^/]+)\/([^/]+)$/);
+    if (!match) invalidLink();
     return `/webtoon/${match[1]}/${match[2]}`;
   }
 
@@ -624,6 +634,7 @@ class DefaultExtension extends MProvider {
   var expectedPath = ${JSON.stringify(readerPath)};
   var finished = false;
   var timer = null;
+  var previousImagesKey = null;
 
   function respond(payload) {
     if (finished) return;
@@ -644,19 +655,33 @@ class DefaultExtension extends MProvider {
     var nodes = Array.prototype.slice.call(
       document.querySelectorAll(".viewer-lazy-img"),
     );
-    if (!nodes.length) return false;
+    if (!nodes.length) {
+      previousImagesKey = null;
+      return false;
+    }
     var seen = {};
     var images = [];
     for (var i = 0; i < nodes.length; i += 1) {
       var node = nodes[i];
       var url = node.currentSrc || node.getAttribute("src") || node.getAttribute("data-src") || "";
-      if (!/^https?:\\/\\//i.test(url)) return false;
+      if (!/^https?:\\/\\//i.test(url)) {
+        previousImagesKey = null;
+        return false;
+      }
       if (!seen[url]) {
         seen[url] = true;
         images.push(url);
       }
     }
-    if (!images.length) return false;
+    if (!images.length) {
+      previousImagesKey = null;
+      return false;
+    }
+    var imagesKey = JSON.stringify(images);
+    if (imagesKey !== previousImagesKey) {
+      previousImagesKey = imagesKey;
+      return false;
+    }
     respond({ ok: true, images: images });
     return true;
   }
@@ -1019,11 +1044,18 @@ class DefaultExtension extends MProvider {
       );
     }
 
-    const payload = await evaluateJavascriptViaWebview(
-      `${this.getNextBaseUrl()}${readerPath}`,
-      this.getHeaders(),
-      [this.createNextReaderImageExtractorScript(readerPath)],
-    );
+    let payload;
+    try {
+      payload = await evaluateJavascriptViaWebview(
+        `${this.getNextBaseUrl()}${readerPath}`,
+        this.getHeaders(),
+        [this.createNextReaderImageExtractorScript(readerPath)],
+      );
+    } catch (_) {
+      throw new Error(
+        `Next Webtoon reader WebView failed parserFamily=next url=${readerPath}`,
+      );
+    }
     return this.parseNextWebviewImageResponse(payload, readerPath).map(
       (image) => ({ url: image, headers: this.getHeaders() }),
     );
