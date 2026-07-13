@@ -721,21 +721,93 @@ const MANHWA_DETAIL_EPISODE_METHODS = {
     };
   },
 
-  parseEpisodeResponse() {
-    throw new Error("NTK Manhwa episode feature is not implemented");
+  parseEpisodeResponse(response, requestUrl, link) {
+    if (response.statusCode < 200 || response.statusCode >= 400) {
+      throw new Error(
+        `Next Manhwa episode HTTP ${response.statusCode} url=${requestUrl}`,
+      );
+    }
+
+    const contentType =
+      response.headers?.["content-type"] ||
+      response.headers?.["Content-Type"] ||
+      "";
+    if (contentType && !contentType.toLowerCase().includes("application/json")) {
+      throw new Error(`Next Manhwa episode non-JSON response url=${requestUrl}`);
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(response.body);
+    } catch (_) {
+      throw new Error(`Next Manhwa episode JSON error url=${requestUrl}`);
+    }
+
+    if (payload?.ok !== true || !Array.isArray(payload?.episodes)) {
+      throw new Error(
+        `Next Manhwa episode structure error url=${requestUrl} invalid=ok,episodes`,
+      );
+    }
+
+    const chapters = [];
+    const seenIds = new Set();
+    for (const episode of payload.episodes) {
+      const sourceEpisodeId =
+        typeof episode?.sourceEpisodeId === "string"
+          ? episode.sourceEpisodeId.trim()
+          : "";
+      if (!sourceEpisodeId) {
+        throw new Error(
+          `Next Manhwa episode structure error url=${requestUrl} missing=sourceEpisodeId`,
+        );
+      }
+      if (seenIds.has(sourceEpisodeId)) {
+        throw new Error(
+          `Next Manhwa episode structure error url=${requestUrl} duplicate=sourceEpisodeId`,
+        );
+      }
+
+      const title = typeof episode?.title === "string" ? episode.title.trim() : "";
+      if (!title) {
+        throw new Error(
+          `Next Manhwa episode structure error url=${requestUrl} missing=title`,
+        );
+      }
+
+      seenIds.add(sourceEpisodeId);
+      chapters.push({
+        name: title,
+        url: `${link}/${encodeURIComponent(sourceEpisodeId)}`,
+        scanlator: "",
+      });
+    }
+    return chapters;
   },
 
   async getDetail(url) {
     const link = this.normalizeWorkLink(url);
-    const requestUrl = `${this.getNextBaseUrl()}${link}`;
-    const response = await this.client.get(requestUrl, this.getHeaders());
+    const sourceWorkId = link.slice("/manhwa/".length);
+    const baseUrl = this.getNextBaseUrl();
+    const detailUrl = `${baseUrl}${link}`;
+    const episodeUrl = `${baseUrl}/api/manhwa/${encodeURIComponent(sourceWorkId)}/episodes/viewer-nav`;
+    const headers = this.getHeaders();
+    const [detailResponse, episodeResponse] = await Promise.all([
+      this.client.get(detailUrl, headers),
+      this.client.get(episodeUrl, headers),
+    ]);
     const detail = MANHWA_DETAIL_EPISODE_METHODS.parseDetailResponse.call(
       this,
-      response,
-      requestUrl,
+      detailResponse,
+      detailUrl,
       link,
     );
-    return { ...detail, chapters: [] };
+    const chapters = MANHWA_DETAIL_EPISODE_METHODS.parseEpisodeResponse.call(
+      this,
+      episodeResponse,
+      episodeUrl,
+      link,
+    );
+    return { ...detail, chapters };
   },
 };
 // endregion MANHWA_DETAIL_EPISODE_METHODS

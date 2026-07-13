@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "episodes": [
+    {
+      "sourceEpisodeId": "nv-episode-3",
+      "title": "서버 제목 3화",
+      "epNo": 300,
+      "active": false
+    },
+    {
+      "sourceEpisodeId": "opaque-episode-2",
+      "title": "서버 제목 2화",
+      "epNo": 2,
+      "active": true
+    },
+    {
+      "sourceEpisodeId": "episode-1",
+      "title": "서버 제목 1화",
+      "epNo": 1,
+      "active": false
+    }
+  ]
+}
