@@ -48,7 +48,20 @@ function runExtractor(extension, observations) {
   const intervals = [];
   const cleared = [];
   let observationIndex = 0;
+  let activeObservation = null;
   const readerPath = "/webtoon/17970/u-mrezmrs1-hypr";
+
+  function nextObservation() {
+    activeObservation = observations[
+      Math.min(observationIndex, observations.length - 1)
+    ];
+    observationIndex += 1;
+    return activeObservation;
+  }
+
+  function imageNodes(observation) {
+    return (observation.urls || []).map(createImageNode);
+  }
 
   vm.runInNewContext(
     extension.createNextReaderImageExtractorScript(readerPath),
@@ -69,14 +82,17 @@ function runExtractor(extension, observations) {
         },
       },
       document: {
-        querySelectorAll() {
-          const urls = observations[
-            Math.min(observationIndex, observations.length - 1)
-          ];
-          observationIndex += 1;
-          return urls.map(createImageNode);
-        },
-        querySelector() {
+        querySelector(selector) {
+          if (selector === ".vw-imgs") {
+            const observation = nextObservation();
+            if (observation.container === false) return null;
+            return {
+              children: new Array(observation.childCount),
+              querySelectorAll() {
+                return imageNodes(activeObservation);
+              },
+            };
+          }
           return null;
         },
       },
@@ -86,14 +102,15 @@ function runExtractor(extension, observations) {
   return { responses, intervals, cleared };
 }
 
-test("extractor waits for a changed image list to stabilize", () => {
+test("extractor waits until every viewer container child is an image", () => {
   const { extension } = loadWebtoonSource();
   const first = "https://cdn.example/001.jpg";
   const second = "https://cdn.example/002.jpg";
+  const third = "https://cdn.example/003.jpg";
   const execution = runExtractor(extension, [
-    [first],
-    [first, second],
-    [first, second],
+    { childCount: 3, urls: [first] },
+    { childCount: 3, urls: [first, second] },
+    { childCount: 3, urls: [first, second, third] },
   ]);
 
   assert.equal(execution.intervals.length, 1);
@@ -106,34 +123,46 @@ test("extractor waits for a changed image list to stabilize", () => {
   execution.intervals[0].callback();
   assert.deepEqual(execution.responses, [{
     name: "setResponse",
-    payload: { ok: true, images: [first, second] },
+    payload: { ok: true, images: [first, second, third] },
   }]);
 });
 
-test("extractor returns an immediately complete list after one 200ms poll", () => {
+test("extractor immediately returns a complete viewer container once", () => {
   const { extension } = loadWebtoonSource();
   const images = [
     "https://cdn.example/001.jpg",
     "https://cdn.example/002.jpg",
   ];
-  const execution = runExtractor(extension, [images, images]);
+  const execution = runExtractor(extension, [{
+    childCount: 2,
+    urls: images,
+  }]);
 
-  assert.equal(execution.responses.length, 0);
-  assert.equal(execution.intervals[0].milliseconds, 200);
-
-  execution.intervals[0].callback();
-  assert.deepEqual(execution.responses[0], {
+  assert.deepEqual(execution.responses, [{
     name: "setResponse",
     payload: { ok: true, images },
-  });
+  }]);
+  assert.equal(execution.intervals.length, 0);
+  assert.deepEqual(execution.cleared, []);
 });
 
-test("extractor clears its interval and responds only once", () => {
+test("extractor waits for a container, matching child count, and valid URLs", () => {
   const { extension } = loadWebtoonSource();
-  const images = ["https://cdn.example/001.jpg"];
-  const execution = runExtractor(extension, [images, images, images]);
+  const first = "https://cdn.example/001.jpg";
+  const second = "https://cdn.example/002.jpg";
+  const execution = runExtractor(extension, [
+    { container: false, childCount: 0, urls: [] },
+    { childCount: 2, urls: [first] },
+    { childCount: 2, urls: [first, ""] },
+    { childCount: 2, urls: [first, second] },
+  ]);
 
   execution.intervals[0].callback();
+  assert.equal(execution.responses.length, 0);
+
+  execution.intervals[0].callback();
+  assert.equal(execution.responses.length, 0);
+
   execution.intervals[0].callback();
 
   assert.equal(execution.responses.length, 1);

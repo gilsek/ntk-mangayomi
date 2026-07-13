@@ -634,7 +634,6 @@ class DefaultExtension extends MProvider {
   var expectedPath = ${JSON.stringify(readerPath)};
   var finished = false;
   var timer = null;
-  var previousImagesKey = null;
 
   function respond(payload) {
     if (finished) return;
@@ -652,36 +651,24 @@ class DefaultExtension extends MProvider {
   }
 
   function collect() {
+    var container = document.querySelector(".vw-imgs");
+    if (!container || !container.children.length) return false;
     var nodes = Array.prototype.slice.call(
-      document.querySelectorAll(".viewer-lazy-img"),
+      container.querySelectorAll(".viewer-lazy-img"),
     );
-    if (!nodes.length) {
-      previousImagesKey = null;
-      return false;
-    }
+    if (nodes.length !== container.children.length) return false;
     var seen = {};
     var images = [];
     for (var i = 0; i < nodes.length; i += 1) {
       var node = nodes[i];
       var url = node.currentSrc || node.getAttribute("src") || node.getAttribute("data-src") || "";
-      if (!/^https?:\\/\\//i.test(url)) {
-        previousImagesKey = null;
-        return false;
-      }
+      if (!/^https?:\\/\\//i.test(url)) return false;
       if (!seen[url]) {
         seen[url] = true;
         images.push(url);
       }
     }
-    if (!images.length) {
-      previousImagesKey = null;
-      return false;
-    }
-    var imagesKey = JSON.stringify(images);
-    if (imagesKey !== previousImagesKey) {
-      previousImagesKey = imagesKey;
-      return false;
-    }
+    if (!images.length) return false;
     respond({ ok: true, images: images });
     return true;
   }

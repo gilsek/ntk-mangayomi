@@ -4,7 +4,7 @@
 
 **Goal:** Next Webtoon 회차를 수정 Mangayomi의 WebView에서 준비한 이미지 URL로 변환해 기본 세로 스크롤 리더에 표시한다.
 
-**Architecture:** `ntk_webtoon.js`가 Next 회차 URL을 검증하고 해당 URL을 WebView로 직접 연다. 전용 스크립트가 `.viewer-lazy-img`의 URL을 DOM 순서대로 반환하며, 확장은 payload를 엄격히 검증해 Mangayomi 페이지 객체로 변환한다.
+**Architecture:** `ntk_webtoon.js`가 Next 회차 URL을 검증하고 해당 URL을 WebView로 직접 연다. 전용 스크립트는 `.vw-imgs`의 0보다 큰 직계 자식 수와 내부 `.viewer-lazy-img` 수가 같을 때 URL을 DOM 순서대로 반환하며, 확장은 payload를 엄격히 검증해 Mangayomi 페이지 객체로 변환한다.
 
 **Tech Stack:** Mangayomi JavaScript source API, `evaluateJavascriptViaWebview`, Flutter InAppWebView `setResponse` bridge, Node.js `node:test`.
 
@@ -12,7 +12,7 @@
 
 - 구현 버전은 `0.107`이다.
 - 루트 페이지 경유와 고정 3초 지연을 사용하지 않는다.
-- 실행 즉시 DOM을 확인하고 이미지가 없을 때만 제한적으로 대기한다.
+- 실행 즉시 DOM을 확인하고 `.vw-imgs`의 직계 자식 전부가 유효한 이미지 노드가 아닐 때만 제한적으로 대기한다.
 - 확장에서 세션, 광고 확인, nonce 또는 HMAC proof를 재현하지 않는다.
 - Legacy Webtoon, Manhwa, Novel, Anime 코드를 수정하거나 공유하지 않는다.
 - 과거 `ntk.js` 리더 코드를 호출하거나 복사하지 않는다.
@@ -124,7 +124,7 @@ Expected: FAIL because `getPageList()` and the WebView test binding do not exist
 
 - [ ] **Step 3: Implement the minimal Next reader**
 
-Add isolated Next helpers to `ntk_webtoon.js`. The reader link must contain exactly `/webtoon/{workId}/{episodeId}` after removing query and fragment. The extractor script must:
+Add isolated Next helpers to `ntk_webtoon.js`. The reader link must be relative or an absolute URL on the configured Next origin and contain exactly `/webtoon/{workId}/{episodeId}` after removing query and fragment. Invalid and cross-origin input must produce a fixed error without echoing the input. The extractor script must:
 
 ```js
 (function () {
@@ -144,10 +144,12 @@ Add isolated Next helpers to `ntk_webtoon.js`. The reader link must contain exac
   }
 
   function collect() {
+    var container = document.querySelector(".vw-imgs");
+    if (!container || !container.children.length) return false;
     var nodes = Array.prototype.slice.call(
-      document.querySelectorAll(".viewer-lazy-img"),
+      container.querySelectorAll(".viewer-lazy-img"),
     );
-    if (!nodes.length) return false;
+    if (nodes.length !== container.children.length) return false;
     var seen = {};
     var images = [];
     for (var i = 0; i < nodes.length; i += 1) {
@@ -181,7 +183,7 @@ Add isolated Next helpers to `ntk_webtoon.js`. The reader link must contain exac
 })();
 ```
 
-`getPageList()` must call the WebView once with the exact absolute reader URL, parse a string or already-decoded object payload, retain only unique HTTP(S) URLs in order, and return page objects with `this.getHeaders()`. Legacy must throw its existing not-implemented error rather than fall through to Next.
+`getPageList()` must call the WebView once with the exact absolute reader URL, parse a string or already-decoded object payload, retain only unique HTTP(S) URLs in order, and return page objects with `this.getHeaders()`. A rejected WebView evaluation must become a fixed `Next Webtoon reader WebView failed` error containing only the normalized relative reader path, never the original rejection text. Legacy must throw its existing not-implemented error rather than fall through to Next.
 
 - [ ] **Step 4: Run the reader tests and verify GREEN**
 
@@ -233,8 +235,10 @@ Set both metadata copies to:
 
 ```js
 version: "0.107",
-notes: "Next Popular, Latest, title search, filters, detail, full episode lists, and WebView-backed reader with platform-safe covers.",
+notes: "Next Popular, Latest, title search, filters, detail, full episode lists, and WebView-backed reader with platform-safe covers. Reader requires modified Mangayomi with the WebView payload-preservation patch.",
 ```
+
+Both source and index notes must state the modified Mangayomi WebView payload-preservation patch requirement without changing `appMinVerReq`.
 
 - [ ] **Step 4: Run metadata tests and verify GREEN**
 
