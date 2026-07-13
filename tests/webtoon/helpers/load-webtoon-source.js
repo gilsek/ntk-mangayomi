@@ -235,6 +235,47 @@ function matchingElements(html, selector) {
         results.push(new TestElement(match[0], match[0]));
       }
     }
+  } else if (selector === "section.hero-v2") {
+    for (const match of html.matchAll(/<section\b[^>]*>/gi)) {
+      if (hasClass(match[0], "hero-v2")) {
+        results.push(new TestElement(match[0], match[0]));
+      }
+    }
+  } else if (selector === "h1.hero-v2-title") {
+    for (const match of html.matchAll(/(<h1\b[^>]*>)([\s\S]*?)<\/h1>/gi)) {
+      if (hasClass(match[1], "hero-v2-title")) {
+        results.push(new TestElement(match[0], match[1]));
+      }
+    }
+  } else if (selector === ".hero-v2-thumb img") {
+    const thumb = elementInnerHtmlByClass(html, "div", "hero-v2-thumb");
+    for (const match of thumb.matchAll(/<img\b[^>]*>/gi)) {
+      results.push(new TestElement(match[0], match[0]));
+    }
+  } else if (selector === "p.hero-v2-desc") {
+    for (const match of html.matchAll(/(<p\b[^>]*>)([\s\S]*?)<\/p>/gi)) {
+      if (hasClass(match[1], "hero-v2-desc")) {
+        results.push(new TestElement(match[0], match[1]));
+      }
+    }
+  } else if (selector === ".hero-v2-author a") {
+    const author = elementInnerHtmlByClass(html, "div", "hero-v2-author");
+    for (const match of author.matchAll(/(<a\b[^>]*>)([\s\S]*?)<\/a>/gi)) {
+      results.push(new TestElement(match[0], match[1]));
+    }
+  } else if (selector === ".hero-v2-tags a.hero-v2-tag") {
+    const tags = elementInnerHtmlByClass(html, "div", "hero-v2-tags");
+    for (const match of tags.matchAll(/(<a\b[^>]*>)([\s\S]*?)<\/a>/gi)) {
+      if (hasClass(match[1], "hero-v2-tag")) {
+        results.push(new TestElement(match[0], match[1]));
+      }
+    }
+  } else if (selector === "span.pill-status") {
+    for (const match of html.matchAll(/(<span\b[^>]*>)([\s\S]*?)<\/span>/gi)) {
+      if (hasClass(match[1], "pill-status")) {
+        results.push(new TestElement(match[0], match[1]));
+      }
+    }
   }
 
   return results;
@@ -376,6 +417,7 @@ function loadWebtoonSource({
   preferences = {},
   statusCode = 200,
   headers = { "content-type": "text/html; charset=utf-8" },
+  responses,
 } = {}) {
   assert.ok(
     fs.existsSync(sourcePath),
@@ -386,7 +428,13 @@ function loadWebtoonSource({
 
   class TestClient {
     async get(url, requestHeaders = {}) {
-      requests.push({ url, headers: requestHeaders });
+      requests.push({ method: "GET", url, headers: requestHeaders });
+      if (typeof responses === "function") {
+        return responses(url, requestHeaders, requests.length - 1);
+      }
+      if (Array.isArray(responses)) {
+        return responses[requests.length - 1];
+      }
       return { body, headers, statusCode };
     }
   }

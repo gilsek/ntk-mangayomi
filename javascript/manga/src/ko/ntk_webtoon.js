@@ -14,7 +14,7 @@ const mangayomiSources = [
     sourceCodeUrl:
       "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_webtoon.js",
     apiUrl: "",
-    version: "0.105",
+    version: "0.106",
     isManga: true,
     itemType: 0,
     isFullData: false,
@@ -22,7 +22,7 @@ const mangayomiSources = [
     additionalParams: "",
     sourceCodeLanguage: 1,
     notes:
-      "Next Popular, Latest, title search, and filters preview with platform-safe covers; detail and reader are not implemented.",
+      "Next Popular, Latest, title search, filters, detail, and full episode lists with platform-safe covers; reader is not implemented.",
     pkgPath: "manga/src/ko/ntk_webtoon.js",
   },
 ];
@@ -590,6 +590,201 @@ class DefaultExtension extends MProvider {
     return this.parseNextSearchResponse(response, requestUrl);
   }
 
+  normalizeNextDetailLink(url) {
+    const value = typeof url === "string" ? url.trim() : "";
+    const withoutOrigin = value.replace(/^https?:\/\/[^/]+/i, "");
+    const path = withoutOrigin.split(/[?#]/)[0];
+    const match = path.match(/^\/webtoon\/([^/]+)\/?$/);
+    if (!match) {
+      throw new Error(`Next Webtoon invalid detail link url=${value}`);
+    }
+    return {
+      link: `/webtoon/${match[1]}`,
+      sourceWorkId: match[1],
+    };
+  }
+
+  getUniqueTexts(elements) {
+    const values = [];
+    const seen = new Set();
+    for (const element of elements) {
+      const value = (element.text || "").trim();
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      values.push(value);
+    }
+    return values;
+  }
+
+  parseNextDetailResponse(response, requestUrl, link) {
+    if (response.statusCode < 200 || response.statusCode >= 400) {
+      throw new Error(
+        `Next Webtoon detail HTTP ${response.statusCode} parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    const contentType =
+      response.headers?.["content-type"] ||
+      response.headers?.["Content-Type"] ||
+      "";
+    if (contentType && !contentType.toLowerCase().includes("text/html")) {
+      throw new Error(
+        `Next Webtoon detail non-HTML response parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    const document = new Document(response.body);
+    if (document.select("section.hero-v2").length === 0) {
+      throw new Error(
+        `Next Webtoon detail structure error parserFamily=next url=${requestUrl} missing=section.hero-v2`,
+      );
+    }
+
+    const name = (document.selectFirst("h1.hero-v2-title").text || "").trim();
+    if (!name) {
+      throw new Error(
+        `Next Webtoon detail structure error parserFamily=next url=${requestUrl} missing=h1.hero-v2-title`,
+      );
+    }
+
+    const cover = document.selectFirst(".hero-v2-thumb img");
+    const image = cover.getSrc || cover.attr("src") || "";
+    let description = (
+      document.selectFirst("p.hero-v2-desc").text || ""
+    ).trim();
+    if (description === "등록된 작품 설명이 없습니다.") description = "";
+
+    const authors = this.getUniqueTexts(
+      document.select(".hero-v2-author a"),
+    );
+    const author = authors.join(", ");
+    const genre = this.getUniqueTexts(
+      document.select(".hero-v2-tags a.hero-v2-tag"),
+    );
+    const statusElement = document.selectFirst("span.pill-status");
+    const statusText = (statusElement.text || "").trim();
+    const statusClasses = (statusElement.attr("class") || "")
+      .split(/\s+/)
+      .filter(Boolean);
+    let status = 5;
+    if (statusClasses.includes("completed") || statusText.includes("완결")) {
+      status = 1;
+    } else if (
+      statusClasses.includes("ongoing") ||
+      statusText.includes("연재")
+    ) {
+      status = 0;
+    }
+
+    return {
+      name,
+      link,
+      imageUrl: this.toAbsoluteUrl(image),
+      description,
+      author,
+      artist: author,
+      status,
+      genre,
+    };
+  }
+
+  parseNextEpisodeResponse(response, requestUrl, sourceWorkId) {
+    if (response.statusCode < 200 || response.statusCode >= 400) {
+      throw new Error(
+        `Next Webtoon episode HTTP ${response.statusCode} parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    const contentType =
+      response.headers?.["content-type"] ||
+      response.headers?.["Content-Type"] ||
+      "";
+    if (contentType && !contentType.toLowerCase().includes("application/json")) {
+      throw new Error(
+        `Next Webtoon episode non-JSON response parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(response.body);
+    } catch (_) {
+      throw new Error(
+        `Next Webtoon episode JSON error parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    if (
+      payload?.ok !== true ||
+      !Number.isInteger(payload?.total) ||
+      payload.total < 0 ||
+      !Array.isArray(payload?.episodes) ||
+      payload.total !== payload.episodes.length
+    ) {
+      throw new Error(
+        `Next Webtoon episode structure error parserFamily=next url=${requestUrl} invalid=total,episodes`,
+      );
+    }
+
+    const chapters = [];
+    const seen = new Set();
+    for (const episode of payload.episodes) {
+      const sourceEpisodeId = episode?.sourceEpisodeId;
+      const validId =
+        (typeof sourceEpisodeId === "number" &&
+          Number.isFinite(sourceEpisodeId)) ||
+        (typeof sourceEpisodeId === "string" &&
+          sourceEpisodeId.trim().length > 0);
+      if (!validId) {
+        throw new Error(
+          `Next Webtoon episode structure error parserFamily=next url=${requestUrl} missing=sourceEpisodeId`,
+        );
+      }
+
+      const episodeId = String(sourceEpisodeId).trim();
+      if (seen.has(episodeId)) continue;
+      seen.add(episodeId);
+
+      let name = typeof episode?.title === "string" ? episode.title.trim() : "";
+      if (!name && Number.isFinite(episode?.epNo)) {
+        name = `${episode.epNo}화`;
+      }
+      if (!name) {
+        throw new Error(
+          `Next Webtoon episode structure error parserFamily=next url=${requestUrl} missing=title,epNo`,
+        );
+      }
+
+      chapters.push({
+        name,
+        url: `/webtoon/${sourceWorkId}/${encodeURIComponent(episodeId)}`,
+        scanlator: "",
+      });
+    }
+    return chapters;
+  }
+
+  async fetchNextDetail(url) {
+    const { link, sourceWorkId } = this.normalizeNextDetailLink(url);
+    const detailUrl = `${this.getNextBaseUrl()}${link}`;
+    const client = new Client();
+    const detailResponse = await client.get(detailUrl, this.getHeaders());
+    const detail = this.parseNextDetailResponse(
+      detailResponse,
+      detailUrl,
+      link,
+    );
+
+    const episodeUrl = `${this.getNextBaseUrl()}/api/webtoon/${encodeURIComponent(sourceWorkId)}/episodes`;
+    const episodeResponse = await client.get(episodeUrl, this.getHeaders());
+    const chapters = this.parseNextEpisodeResponse(
+      episodeResponse,
+      episodeUrl,
+      sourceWorkId,
+    );
+    return { ...detail, chapters };
+  }
+
   parseLegacyListItem(element, requestUrl) {
     const titleElement = element.selectFirst("span.title.white");
     const name = (titleElement.text || "").trim();
@@ -693,6 +888,11 @@ class DefaultExtension extends MProvider {
   async getLatestUpdates(page) {
     if (this.getParserFamily() === "next") return this.fetchNextLatest(page);
     return this.fetchLegacyList({ mode: "latest", page });
+  }
+
+  async getDetail(url) {
+    if (this.getParserFamily() === "next") return this.fetchNextDetail(url);
+    throw new Error("Legacy Webtoon detail is not implemented");
   }
 
   async search(query, page, filters) {
