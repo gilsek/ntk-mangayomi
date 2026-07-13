@@ -1,0 +1,17 @@
+{
+  "works": [
+    {
+      "sourceWorkId": 2,
+      "title": "원피스(ONE PIECE)",
+      "thumbnailUrl": "/covers/one-piece.jpg"
+    },
+    {
+      "sourceWorkId": "u-opaque-work",
+      "title": "표지 없는 작품"
+    }
+  ],
+  "hasMore": true,
+  "page": 1,
+  "pageSize": 49,
+  "total": 9131
+}

@@ -285,12 +285,353 @@ const MANHWA_LIST_METHODS = {
 
 // region MANHWA_SEARCH_FILTER_METHODS
 const MANHWA_SEARCH_FILTER_METHODS = {
-  async search() {
-    throw new Error("NTK Manhwa search feature is not implemented");
+  appendParameter(parameters, name, value) {
+    if (value === undefined || value === null || value === "") return;
+    parameters.push(`${encodeURIComponent(name)}=${encodeURIComponent(value)}`);
+  },
+
+  selectedFilterValue(filters, type) {
+    const filter = Array.isArray(filters)
+      ? filters.find((candidate) => candidate?.type === type)
+      : null;
+    if (!filter || !Number.isInteger(filter.state)) return null;
+    const option = Array.isArray(filter.values)
+      ? filter.values[filter.state]
+      : null;
+    return typeof option?.value === "string" ? option.value : null;
+  },
+
+  buildSearchUrl(query) {
+    const parameters = [];
+    MANHWA_SEARCH_FILTER_METHODS.appendParameter(parameters, "q", query);
+    MANHWA_SEARCH_FILTER_METHODS.appendParameter(
+      parameters,
+      "kind",
+      "manhwa",
+    );
+    MANHWA_SEARCH_FILTER_METHODS.appendParameter(
+      parameters,
+      "field",
+      "title",
+    );
+    MANHWA_SEARCH_FILTER_METHODS.appendParameter(
+      parameters,
+      "match",
+      "contains",
+    );
+    return `${this.getNextBaseUrl()}/search?${parameters.join("&")}`;
+  },
+
+  buildFilterUrl(page, filters) {
+    const parameters = [];
+    const liveFilters = MANHWA_SEARCH_FILTER_METHODS.getFilterList.call(this);
+    const statusFilter = Array.isArray(filters)
+      ? filters.find((candidate) => candidate?.type === "status")
+      : null;
+    const selectedStatus = statusFilter
+      ? MANHWA_SEARCH_FILTER_METHODS.selectedFilterValue(filters, "status")
+      : "ongoing";
+    const liveStatuses = new Set(
+      liveFilters
+        .find((candidate) => candidate.type === "status")
+        .values.map((option) => option.value),
+    );
+    const status = liveStatuses.has(selectedStatus) ? selectedStatus : null;
+    MANHWA_SEARCH_FILTER_METHODS.appendParameter(
+      parameters,
+      "status",
+      status,
+    );
+
+    const liveGenres = new Set(
+      liveFilters
+        .find((candidate) => candidate.type === "genres")
+        .state.map((genre) => genre.value),
+    );
+    const genreFilter = Array.isArray(filters)
+      ? filters.find((candidate) => candidate?.type === "genres")
+      : null;
+    const selectedGenres = [];
+    const seenGenres = new Set();
+    for (const genre of genreFilter?.state || []) {
+      const value = typeof genre?.value === "string" ? genre.value : "";
+      if (
+        !liveGenres.has(value) ||
+        seenGenres.has(value) ||
+        (genre.state !== 1 && genre.state !== 2)
+      ) {
+        continue;
+      }
+      seenGenres.add(value);
+      selectedGenres.push(genre.state === 2 ? `-${value}` : value);
+    }
+    MANHWA_SEARCH_FILTER_METHODS.appendParameter(
+      parameters,
+      "g",
+      selectedGenres.join(","),
+    );
+
+    const selectedSort = MANHWA_SEARCH_FILTER_METHODS.selectedFilterValue(
+      filters,
+      "sort",
+    );
+    const liveSorts = new Set(
+      liveFilters
+        .find((candidate) => candidate.type === "sort")
+        .values.map((option) => option.value),
+    );
+    const sort = liveSorts.has(selectedSort) ? selectedSort : null;
+    if (sort && sort !== "new") {
+      MANHWA_SEARCH_FILTER_METHODS.appendParameter(
+        parameters,
+        "sort",
+        sort,
+      );
+    }
+    MANHWA_SEARCH_FILTER_METHODS.appendParameter(
+      parameters,
+      "withTotal",
+      "1",
+    );
+    MANHWA_SEARCH_FILTER_METHODS.appendParameter(
+      parameters,
+      "page",
+      String(page),
+    );
+    MANHWA_SEARCH_FILTER_METHODS.appendParameter(
+      parameters,
+      "pageSize",
+      "49",
+    );
+    return `${this.getNextBaseUrl()}/api/manhwa-list?${parameters.join("&")}`;
+  },
+
+  assertResponse(response, requestUrl, parserFamily, expectedContentType) {
+    if (response.statusCode < 200 || response.statusCode >= 400) {
+      throw new Error(
+        `NTK Manhwa HTTP ${response.statusCode} parserFamily=${parserFamily} url=${requestUrl}`,
+      );
+    }
+    const contentType =
+      response.headers?.["content-type"] ||
+      response.headers?.["Content-Type"] ||
+      "";
+    if (
+      contentType &&
+      !contentType.toLowerCase().includes(expectedContentType)
+    ) {
+      const label = expectedContentType === "text/html" ? "HTML" : "JSON";
+      throw new Error(
+        `NTK Manhwa non-${label} response parserFamily=${parserFamily} url=${requestUrl}`,
+      );
+    }
+  },
+
+  parseSearchResponse(response, requestUrl) {
+    MANHWA_SEARCH_FILTER_METHODS.assertResponse(
+      response,
+      requestUrl,
+      "next-search",
+      "text/html",
+    );
+    const document = new Document(response.body);
+    if (document.select(".ep-empty").length > 0) {
+      return { list: [], hasNextPage: false };
+    }
+    if (document.select("div.search-results-grid").length === 0) {
+      throw new Error(
+        `NTK Manhwa search structure error parserFamily=next-search url=${requestUrl} missing=div.search-results-grid,.ep-empty`,
+      );
+    }
+
+    const cards = document.select(
+      'div.search-results-grid > a.card[href^="/manhwa/"]',
+    );
+    return {
+      list: cards.map((element) => {
+        const name = (element.selectFirst("p.subject").text || "").trim();
+        if (!name) {
+          throw new Error(
+            `NTK Manhwa search card structure error parserFamily=next-search url=${requestUrl} missing=p.subject`,
+          );
+        }
+        const suppliedLink = element.getHref || element.attr("href") || "";
+        const cover = element.selectFirst(".thumb img.search-thumb-img");
+        const image = cover.getSrc || cover.attr("src") || "";
+        return {
+          name,
+          link: this.normalizeWorkLink(suppliedLink),
+          imageUrl: this.toAbsoluteUrl(image),
+        };
+      }),
+      hasNextPage: false,
+    };
+  },
+
+  parseFilterResponse(response, requestUrl) {
+    MANHWA_SEARCH_FILTER_METHODS.assertResponse(
+      response,
+      requestUrl,
+      "next-filter",
+      "application/json",
+    );
+    let payload;
+    try {
+      payload = JSON.parse(response.body);
+    } catch (_) {
+      throw new Error(
+        `NTK Manhwa filter JSON error parserFamily=next-filter url=${requestUrl}`,
+      );
+    }
+    if (
+      !Array.isArray(payload?.works) ||
+      typeof payload?.hasMore !== "boolean"
+    ) {
+      throw new Error(
+        `NTK Manhwa filter structure error parserFamily=next-filter url=${requestUrl}`,
+      );
+    }
+
+    const seenIds = new Set();
+    const list = payload.works.map((work) => {
+      const sourceWorkId = work?.sourceWorkId;
+      const validId =
+        (typeof sourceWorkId === "number" && Number.isFinite(sourceWorkId)) ||
+        (typeof sourceWorkId === "string" && sourceWorkId.trim().length > 0);
+      if (!validId) {
+        throw new Error(
+          `NTK Manhwa filter work structure error parserFamily=next-filter url=${requestUrl} missing=sourceWorkId`,
+        );
+      }
+      const id = String(sourceWorkId).trim();
+      if (seenIds.has(id)) {
+        throw new Error(
+          `NTK Manhwa filter structure error parserFamily=next-filter url=${requestUrl} duplicate=sourceWorkId`,
+        );
+      }
+      seenIds.add(id);
+
+      const name = typeof work?.title === "string" ? work.title.trim() : "";
+      if (!name) {
+        throw new Error(
+          `NTK Manhwa filter work structure error parserFamily=next-filter url=${requestUrl} missing=title`,
+        );
+      }
+      const image =
+        typeof work.thumbnailUrl === "string" ? work.thumbnailUrl.trim() : "";
+      return {
+        name,
+        link: this.normalizeWorkLink(`/manhwa/${id}`),
+        imageUrl: this.toAbsoluteUrl(image),
+      };
+    });
+    return { list, hasNextPage: payload.hasMore };
+  },
+
+  async search(query, page, filters) {
+    const normalizedQuery = typeof query === "string" ? query.trim() : "";
+    if (normalizedQuery) {
+      if (page > 1) return { list: [], hasNextPage: false };
+      const requestUrl = MANHWA_SEARCH_FILTER_METHODS.buildSearchUrl.call(
+        this,
+        normalizedQuery,
+      );
+      const response = await this.client.get(requestUrl, this.getHeaders());
+      return MANHWA_SEARCH_FILTER_METHODS.parseSearchResponse.call(
+        this,
+        response,
+        requestUrl,
+      );
+    }
+
+    const requestUrl = MANHWA_SEARCH_FILTER_METHODS.buildFilterUrl.call(
+      this,
+      page,
+      filters,
+    );
+    const response = await this.client.get(requestUrl, this.getHeaders());
+    return MANHWA_SEARCH_FILTER_METHODS.parseFilterResponse.call(
+      this,
+      response,
+      requestUrl,
+    );
   },
 
   getFilterList() {
-    throw new Error("NTK Manhwa filter feature is not implemented");
+    const select = (type, name, state, values) => ({
+      type_name: "SelectFilter",
+      type,
+      name,
+      state,
+      values: values.map(([optionName, value]) => ({
+        type_name: "SelectOption",
+        name: optionName,
+        value,
+      })),
+    });
+    const genres = [
+      "순정",
+      "판타지",
+      "러브코미디",
+      "드라마",
+      "17",
+      "학원",
+      "라노벨",
+      "개그",
+      "액션",
+      "백합",
+      "일상",
+      "SF",
+      "이세계",
+      "스릴러",
+      "애니화",
+      "전생",
+      "스포츠",
+      "TS",
+      "소년",
+      "먹방",
+      "붕탁",
+      "게임",
+      "호러",
+      "시대",
+      "로맨스",
+      "추리",
+      "음악",
+      "무협",
+      "BL",
+    ];
+    return [
+      select("status", "상태", 1, [
+        ["전체", ""],
+        ["연재/방영중", "ongoing"],
+        ["완결", "completed"],
+      ]),
+      {
+        type_name: "HeaderFilter",
+        type: "genreHint",
+        name: "장르: 체크=포함, 가로선=제외",
+      },
+      {
+        type_name: "GroupFilter",
+        type: "genres",
+        name: "장르",
+        state: genres.map((genre) => ({
+          type_name: "TriState",
+          type: "genre",
+          name: genre,
+          value: genre,
+          state: 0,
+        })),
+      },
+      select("sort", "정렬", 0, [
+        ["최신순", "new"],
+        ["신작순", "fresh"],
+        ["북마크순", "hot"],
+        ["조회순", "views"],
+        ["평점순", "rating"],
+        ["화수순", "episodes"],
+      ]),
+    ];
   },
 };
 // endregion MANHWA_SEARCH_FILTER_METHODS
