@@ -258,6 +258,82 @@ class DefaultExtension extends MProvider {
     return `${this.getNextBaseUrl()}/api/works?${parameters.join("&")}`;
   }
 
+  parseNextFilterWork(work, requestUrl) {
+    const sourceWorkId = work?.sourceWorkId;
+    const validSourceWorkId =
+      (typeof sourceWorkId === "number" && Number.isFinite(sourceWorkId)) ||
+      (typeof sourceWorkId === "string" && sourceWorkId.trim().length > 0);
+    if (!validSourceWorkId) {
+      throw new Error(
+        `Next Webtoon filter work structure error parserFamily=next url=${requestUrl} missing=sourceWorkId`,
+      );
+    }
+
+    const name = typeof work?.title === "string" ? work.title.trim() : "";
+    if (!name) {
+      throw new Error(
+        `Next Webtoon filter work structure error parserFamily=next url=${requestUrl} missing=title`,
+      );
+    }
+
+    const image =
+      typeof work.thumbnailUrl === "string" ? work.thumbnailUrl : "";
+    return {
+      name,
+      link: `/webtoon/${String(sourceWorkId)}`,
+      imageUrl: this.toAbsoluteUrl(image),
+    };
+  }
+
+  parseNextFilterResponse(response, requestUrl) {
+    if (response.statusCode < 200 || response.statusCode >= 400) {
+      throw new Error(
+        `Next Webtoon HTTP ${response.statusCode} parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    const contentType =
+      response.headers?.["content-type"] ||
+      response.headers?.["Content-Type"] ||
+      "";
+    if (contentType && !contentType.toLowerCase().includes("application/json")) {
+      throw new Error(
+        `Next Webtoon non-JSON response parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(response.body);
+    } catch (_) {
+      throw new Error(
+        `Next Webtoon filter JSON error parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    if (
+      !Array.isArray(payload?.works) ||
+      typeof payload?.hasMore !== "boolean"
+    ) {
+      throw new Error(
+        `Next Webtoon filter structure error parserFamily=next url=${requestUrl}`,
+      );
+    }
+
+    return {
+      list: payload.works.map((work) =>
+        this.parseNextFilterWork(work, requestUrl),
+      ),
+      hasNextPage: payload.hasMore,
+    };
+  }
+
+  async fetchNextFilters(page, filters) {
+    const requestUrl = this.buildNextFilterUrl(page, filters);
+    const response = await new Client().get(requestUrl, this.getHeaders());
+    return this.parseNextFilterResponse(response, requestUrl);
+  }
+
   parseNextRankCard(element, titleSelector, requestUrl) {
     const name = (element.selectFirst(titleSelector).text || "").trim();
     if (!name) {
@@ -615,10 +691,11 @@ class DefaultExtension extends MProvider {
   async search(query, page, filters) {
     if (this.getParserFamily() === "next") {
       const normalizedQuery = query.trim();
-      if (!normalizedQuery || page > 1) {
-        return { list: [], hasNextPage: false };
+      if (normalizedQuery) {
+        if (page > 1) return { list: [], hasNextPage: false };
+        return this.fetchNextSearch(normalizedQuery);
       }
-      return this.fetchNextSearch(normalizedQuery);
+      return this.fetchNextFilters(page, filters);
     }
     const normalizedQuery = query.trim();
     if (normalizedQuery.length === 1) {

@@ -1,0 +1,18 @@
+{
+  "works": [
+    {
+      "sourceWorkId": 850661,
+      "title": "필터 작품",
+      "thumbnailUrl": "https://aws-cdn1.site/wt/thumbs/850661.jpg"
+    },
+    {
+      "sourceWorkId": "opaque-key",
+      "title": "표지 없는 작품",
+      "thumbnailUrl": ""
+    }
+  ],
+  "page": 1,
+  "hasMore": true,
+  "pageSize": 42,
+  "total": 43
+}

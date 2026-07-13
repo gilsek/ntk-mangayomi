@@ -9,6 +9,10 @@ const fixture = fs.readFileSync(
   path.join(__dirname, "fixtures", "next-search-title.html"),
   "utf8",
 );
+const filterFixture = fs.readFileSync(
+  path.join(__dirname, "fixtures", "next-filter-page.json"),
+  "utf8",
+);
 
 function plain(value) {
   return JSON.parse(JSON.stringify(value));
@@ -16,7 +20,7 @@ function plain(value) {
 
 test("requests a contains title search on the Next site", async () => {
   const { extension, requests } = loadWebtoonSource({ body: fixture });
-  await extension.search(" 뻐꾸기 ", 1, []);
+  await extension.search(" 뻐꾸기 ", 1, extension.getFilterList());
   const url = new URL(requests[0].url);
   assert.equal(url.pathname, "/search");
   assert.equal(url.searchParams.get("q"), "뻐꾸기");
@@ -24,13 +28,26 @@ test("requests a contains title search on the Next site", async () => {
   assert.equal(url.searchParams.get("match"), "contains");
 });
 
-test("does not request an empty title or a second search page", async () => {
-  for (const [query, page] of [["   ", 1], ["뻐꾸기", 2]]) {
-    const { extension, requests } = loadWebtoonSource();
-    assert.deepEqual(plain(await extension.search(query, page, [])), {
-      list: [],
-      hasNextPage: false,
-    });
-    assert.equal(requests.length, 0);
-  }
+test("requests the filtered works API for an empty title", async () => {
+  const { extension, requests } = loadWebtoonSource({
+    body: filterFixture,
+    headers: { "content-type": "application/json" },
+  });
+
+  await extension.search("   ", 2, extension.getFilterList());
+
+  assert.equal(requests.length, 1);
+  const url = new URL(requests[0].url);
+  assert.equal(url.pathname, "/api/works");
+  assert.equal(url.searchParams.get("page"), "2");
+});
+
+test("does not request a second title search page", async () => {
+  const { extension, requests } = loadWebtoonSource();
+
+  assert.deepEqual(plain(await extension.search("뻐꾸기", 2, [])), {
+    list: [],
+    hasNextPage: false,
+  });
+  assert.equal(requests.length, 0);
 });

@@ -86,6 +86,15 @@ test("exposes the approved Next filter model", () => {
   ]);
   assert.equal(filters.some((filter) => filter.type === "weekday"), false);
   assert.equal(filterByType(filters, "genreHint").type_name, "HeaderFilter");
+  for (const type of ["workType", "platform", "sort"]) {
+    const filter = filterByType(filters, type);
+    assert.equal(filter.type_name, "SelectFilter");
+    for (const option of filter.values) {
+      assert.equal(option.type_name, "SelectOption");
+    }
+  }
+  assert.equal(filterByType(filters, "mainGenres").type_name, "GroupFilter");
+  assert.equal(filterByType(filters, "detailGenres").type_name, "GroupFilter");
   assert.deepEqual(genrePairs(filterByType(filters, "mainGenres")), MAIN_GENRES);
   assert.deepEqual(genrePairs(filterByType(filters, "detailGenres")), DETAIL_GENRES);
   assert.deepEqual(optionPairs(filterByType(filters, "platform")), PLATFORMS);
