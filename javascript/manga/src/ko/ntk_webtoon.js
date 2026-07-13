@@ -14,7 +14,7 @@ const mangayomiSources = [
     sourceCodeUrl:
       "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_webtoon.js",
     apiUrl: "",
-    version: "0.106",
+    version: "0.107",
     isManga: true,
     itemType: 0,
     isFullData: false,
@@ -22,7 +22,7 @@ const mangayomiSources = [
     additionalParams: "",
     sourceCodeLanguage: 1,
     notes:
-      "Next Popular, Latest, title search, filters, detail, and full episode lists with platform-safe covers; reader is not implemented.",
+      "Next Popular, Latest, title search, filters, detail, full episode lists, and WebView-backed reader with platform-safe covers.",
     pkgPath: "manga/src/ko/ntk_webtoon.js",
   },
 ];

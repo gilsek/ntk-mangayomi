@@ -27,7 +27,7 @@ test("registers the rebuild Webtoon source for client list testing", () => {
   assert.equal(webtoon.isManga, true);
   assert.equal(webtoon.isNsfw, true);
   assert.equal(webtoon.hasCloudflare, false);
-  assert.equal(webtoon.version, "0.106");
+  assert.equal(webtoon.version, "0.107");
   assert.equal(
     path.posix.basename(new URL(webtoon.sourceCodeUrl).pathname),
     "ntk_webtoon.js",
@@ -38,7 +38,10 @@ test("registers the rebuild Webtoon source for client list testing", () => {
   );
   assert.equal(webtoon.additionalParams, "");
   assert.match(webtoon.notes, /Popular.*Latest.*title search.*filters/i);
-  assert.match(webtoon.notes, /detail.*reader.*not implemented/i);
+  assert.match(webtoon.notes, /detail/i);
+  assert.match(webtoon.notes, /full episode lists/i);
+  assert.match(webtoon.notes, /reader/i);
+  assert.doesNotMatch(webtoon.notes, /not implemented/i);
 });
 
 test("preserves the existing Manhwa and Novel registrations", () => {
