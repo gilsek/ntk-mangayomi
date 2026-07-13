@@ -64,4 +64,3 @@ Expected: all commands exit 0 with zero test failures.
 - [ ] **Step 6: Commit and deploy**
 
 Commit only the planned files with `fix: parse manhwa latest in client runtime`, push `master`, then confirm GitHub raw metadata returns version `0.206`.
-

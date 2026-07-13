@@ -26,6 +26,32 @@ function htmlResponse(body, overrides = {}) {
   };
 }
 
+function asMangayomiElement(element) {
+  return {
+    attr(name) {
+      return element?.attr(name) ?? "";
+    },
+    get text() {
+      return element?.text ?? "";
+    },
+    get getSrc() {
+      return element?.attr("src") ?? "";
+    },
+    select(selector) {
+      return (element?.select(selector) ?? []).map(asMangayomiElement);
+    },
+    selectFirst(selector) {
+      return asMangayomiElement(element?.selectFirst(selector) ?? null);
+    },
+  };
+}
+
+class MangayomiRuntimeDocument {
+  constructor(html) {
+    return asMangayomiElement(new TestDocument(html));
+  }
+}
+
 test("exposes Latest and requests only the first Manhwa updates page", async () => {
   const stopAfterRequest = new Error("stop after request");
   const { extension, requests } = loadManhwaSource({
@@ -82,6 +108,18 @@ test("parses all 60 Manhwa update cards in DOM order", async () => {
     false,
   );
   assert.equal(result.list.some((item) => item.name === "Ignore Webtoon"), false);
+});
+
+test("parses Latest when a missing selectFirst match stays truthy", async () => {
+  const { extension } = loadManhwaSource({
+    DocumentClass: MangayomiRuntimeDocument,
+    responses: [htmlResponse(fixture("next-latest-page.html"))],
+  });
+
+  const result = plain(await extension.getLatestUpdates(1));
+
+  assert.equal(result.list.length, 60);
+  assert.equal(result.list[0].name, "Latest 01");
 });
 
 test("returns a normal empty Latest page only for the board empty marker", async () => {

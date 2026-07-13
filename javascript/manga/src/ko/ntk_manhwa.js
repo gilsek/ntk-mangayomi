@@ -14,7 +14,7 @@ const mangayomiSources = [
     sourceCodeUrl:
       "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_manhwa.js",
     apiUrl: "",
-    version: "0.205",
+    version: "0.206",
     isManga: true,
     itemType: 0,
     isFullData: false,
@@ -230,18 +230,20 @@ const MANHWA_LIST_METHODS = {
     MANHWA_LIST_METHODS.assertHtmlResponse(response, "Latest");
 
     const document = new Document(response.body);
-    const container = document.selectFirst("main.container.manhwa-updates");
-    if (!container) {
+    const containers = document.select("main.container.manhwa-updates");
+    if (containers.length !== 1) {
       throw new Error("NTK Manhwa Latest structure is missing");
     }
-    if (container.selectFirst("div.board-empty > div.t")) {
+    const container = containers[0];
+    if (container.select("div.board-empty > div.t").length > 0) {
       return { list: [], hasNextPage: false };
     }
 
-    const grid = container.selectFirst("ul.upd-grid");
-    if (!grid) {
+    const grids = container.select("ul.upd-grid");
+    if (grids.length !== 1) {
       throw new Error("NTK Manhwa Latest structure is missing");
     }
+    const grid = grids[0];
 
     const list = [];
     for (const card of grid.select("li.upd-card")) {

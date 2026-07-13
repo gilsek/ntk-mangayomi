@@ -17,7 +17,7 @@ function assertPublishedManhwaMetadata(manhwa) {
   assert.equal(manhwa.id, 260713002);
   assert.equal(manhwa.name, "NTK Manhwa");
   assert.equal(manhwa.baseUrl, "https://sbxh9.com");
-  assert.equal(manhwa.version, "0.205");
+  assert.equal(manhwa.version, "0.206");
   assert.equal(manhwa.itemType, 0);
   assert.equal(manhwa.isManga, true);
   assert.equal(manhwa.additionalParams, "");

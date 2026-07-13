@@ -26,4 +26,3 @@ The Node test DOM returns `null` for a missing `selectFirst()` match, so the exi
 - The new runtime-compatible test must fail before the source change by receiving zero works instead of 60.
 - Latest focused tests, all Manhwa tests, and the full repository suite must pass after the fix.
 - `node --check`, `git diff --check`, live `/manhwa/updates`, and GitHub raw `0.206` metadata must pass before completion.
-

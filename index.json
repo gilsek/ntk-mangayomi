@@ -34,7 +34,7 @@
     "hasCloudflare": false,
     "sourceCodeUrl": "https://raw.githubusercontent.com/gilsek/ntk-mangayomi/master/javascript/manga/src/ko/ntk_manhwa.js",
     "apiUrl": "",
-    "version": "0.205",
+    "version": "0.206",
     "isManga": true,
     "itemType": 0,
     "isFullData": false,
