@@ -110,12 +110,175 @@ const MANHWA_LIST_METHODS = {
     return true;
   },
 
-  async getPopular() {
-    throw new Error("NTK Manhwa list feature is not implemented");
+  responseHeader(response, name) {
+    const headers = response?.headers;
+    if (!headers) return "";
+    if (typeof headers.get === "function") {
+      return String(
+        headers.get(name) ?? headers.get(name.toLowerCase()) ?? "",
+      );
+    }
+    if (typeof headers.value === "function") {
+      return String(
+        headers.value(name) ?? headers.value(name.toLowerCase()) ?? "",
+      );
+    }
+    const expected = name.toLowerCase();
+    for (const key of Object.keys(headers)) {
+      if (key.toLowerCase() === expected) return String(headers[key] ?? "");
+    }
+    return "";
   },
 
-  async getLatestUpdates() {
-    throw new Error("NTK Manhwa list feature is not implemented");
+  assertHtmlResponse(response, feature) {
+    const statusCode = Number(response?.statusCode ?? response?.status ?? 0);
+    if (statusCode < 200 || statusCode >= 300) {
+      throw new Error(`NTK Manhwa ${feature} HTTP failure`);
+    }
+    const contentType = MANHWA_LIST_METHODS.responseHeader(
+      response,
+      "content-type",
+    ).toLowerCase();
+    if (!contentType.includes("text/html")) {
+      throw new Error(`NTK Manhwa ${feature} response is not HTML`);
+    }
+  },
+
+  isUnrelatedWebtoonLink(value) {
+    const candidate = String(value ?? "").trim().toLowerCase();
+    return (
+      candidate.startsWith("/webtoon/") ||
+      candidate.startsWith(
+        `${this.getNextBaseUrl().toLowerCase()}/webtoon/`,
+      )
+    );
+  },
+
+  coverUrl(card, selector) {
+    const cover = card.selectFirst(selector);
+    const value = cover ? String(cover.attr("src") ?? "").trim() : "";
+    return value ? this.toAbsoluteUrl(value) : "";
+  },
+
+  async getPopular(page) {
+    if (page > 1) return { list: [], hasNextPage: false };
+
+    const response = await this.client.get(
+      `${this.getNextBaseUrl()}/rank?period=week&kind=manhwa`,
+      this.getHeaders(),
+    );
+    MANHWA_LIST_METHODS.assertHtmlResponse(response, "Popular");
+
+    const document = new Document(response.body);
+    const container = document.selectFirst("main.rank-v2-page");
+    if (!container) {
+      throw new Error("NTK Manhwa Popular structure is missing");
+    }
+
+    const rankedCards = [
+      ...container.select("a.rank-v2-champion"),
+      ...container.select("a.rank-v2-runner"),
+      ...container.select("a.rank-v2-row"),
+    ];
+    const list = [];
+    for (const card of rankedCards) {
+      const rawLink = String(card.attr("href") ?? "").trim();
+      if (MANHWA_LIST_METHODS.isUnrelatedWebtoonLink.call(this, rawLink)) {
+        continue;
+      }
+
+      const classes = String(card.attr("class") ?? "").split(/\s+/);
+      const titleElement = classes.includes("rank-v2-champion")
+        ? card.selectFirst("h2")
+        : classes.includes("rank-v2-runner")
+          ? card.selectFirst(".rank-v2-runner-body > strong")
+          : card.selectFirst(".rank-v2-row-title > strong");
+      const name = titleElement ? String(titleElement.text ?? "").trim() : "";
+      if (!name || !rawLink) {
+        throw new Error("NTK Manhwa malformed Popular card");
+      }
+
+      let link;
+      try {
+        link = this.normalizeWorkLink(rawLink);
+      } catch (_) {
+        throw new Error("NTK Manhwa malformed Popular card");
+      }
+      list.push({
+        name,
+        link,
+        imageUrl: MANHWA_LIST_METHODS.coverUrl.call(
+          this,
+          card,
+          ".rank-v2-cover > img",
+        ),
+      });
+    }
+    if (list.length === 0) {
+      throw new Error("NTK Manhwa Popular cards are missing");
+    }
+    return { list, hasNextPage: false };
+  },
+
+  async getLatestUpdates(page) {
+    if (page > 1) return { list: [], hasNextPage: false };
+
+    const response = await this.client.get(
+      `${this.getNextBaseUrl()}/manhwa/updates`,
+      this.getHeaders(),
+    );
+    MANHWA_LIST_METHODS.assertHtmlResponse(response, "Latest");
+
+    const document = new Document(response.body);
+    const container = document.selectFirst("main.container.manhwa-updates");
+    if (!container) {
+      throw new Error("NTK Manhwa Latest structure is missing");
+    }
+    if (container.selectFirst("div.board-empty > div.t")) {
+      return { list: [], hasNextPage: false };
+    }
+
+    const grid = container.selectFirst("ul.upd-grid");
+    if (!grid) {
+      throw new Error("NTK Manhwa Latest structure is missing");
+    }
+
+    const list = [];
+    for (const card of grid.select("li.upd-card")) {
+      const linkElement = card.selectFirst("a.upd-allbtn");
+      const rawLink = linkElement
+        ? String(linkElement.attr("href") ?? "").trim()
+        : "";
+      if (MANHWA_LIST_METHODS.isUnrelatedWebtoonLink.call(this, rawLink)) {
+        continue;
+      }
+
+      const titleElement = card.selectFirst(".upd-title");
+      const name = titleElement ? String(titleElement.text ?? "").trim() : "";
+      if (!name || !rawLink) {
+        throw new Error("NTK Manhwa malformed Latest card");
+      }
+
+      let link;
+      try {
+        link = this.normalizeWorkLink(rawLink);
+      } catch (_) {
+        throw new Error("NTK Manhwa malformed Latest card");
+      }
+      list.push({
+        name,
+        link,
+        imageUrl: MANHWA_LIST_METHODS.coverUrl.call(
+          this,
+          card,
+          ".upd-thumb > img",
+        ),
+      });
+    }
+    if (list.length === 0) {
+      throw new Error("NTK Manhwa Latest cards are missing");
+    }
+    return { list, hasNextPage: false };
   },
 };
 // endregion MANHWA_LIST_METHODS
